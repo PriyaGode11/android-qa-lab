@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TaskLab</string>
+
+    <string name="login_title">Sign in to TaskLab</string>
+    <string name="username_hint">Username</string>
+    <string name="password_hint">Password</string>
+    <string name="login">Log in</string>
+    <string name="demo_credentials">Demo account: qa_user / Passw0rd!</string>
+
+    <string name="welcome">Welcome, %1$s</string>
+    <string name="logout">Log out</string>
+    <string name="task_hint">New task</string>
+    <string name="add">Add</string>
+    <string name="empty_state">Nothing here yet. Add your first task above.</string>
+    <string name="clear_completed">Clear completed</string>
+
+    <string name="delete_title">Delete task?</string>
+    <string name="delete_message">\"%1$s\" will be removed.</string>
+    <string name="delete">Delete</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete_task_description">Delete %1$s</string>
+</resources>
