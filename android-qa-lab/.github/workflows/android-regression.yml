@@ -1,0 +1,150 @@
+name: Android regression
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 7 * * *"   # nightly full regression
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "TestNG suite to run"
+        type: choice
+        options: [testng-regression.xml, testng-smoke.xml]
+        default: testng-regression.xml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build APK + unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit tests and debug APK
+        working-directory: android-app
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon testDebugUnitTest assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-reports
+          path: android-app/app/build/reports/tests/
+
+  ui-regression:
+    name: Appium (API ${{ matrix.api-level }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - api-level: 29
+            target: default
+          - api-level: 34
+            target: google_apis
+    env:
+      # Pull requests get the quick smoke gate; main, nightly and manual runs get everything.
+      SUITE: ${{ inputs.suite || (github.event_name == 'pull_request' && 'testng-smoke.xml' || 'testng-regression.xml') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-debug-apk
+          path: apk
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install Appium and the UiAutomator2 driver
+        run: |
+          npm install -g appium@2
+          appium driver install uiautomator2
+          appium --version
+
+      - name: Start Appium server
+        run: |
+          nohup appium --address 127.0.0.1 --port 4723 --log-timestamp > appium.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:4723/status && exit 0
+            sleep 1
+          done
+          echo "Appium did not start"; cat appium.log; exit 1
+
+      - name: Run ${{ env.SUITE }} on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: ${{ matrix.target }}
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            mkdir -p appium-tests/target/artifacts
+            adb logcat -c
+            mvn -B -f appium-tests/pom.xml test -Dsuite=$SUITE -Dapp.path=$GITHUB_WORKSPACE/apk/app-debug.apk; status=$?; adb logcat -d > appium-tests/target/artifacts/logcat.txt; exit $status
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: appium-results-api-${{ matrix.api-level }}
+          path: |
+            appium-tests/target/surefire-reports/
+            appium-tests/target/artifacts/
+            appium.log
+
+      - name: Publish test summary
+        if: always()
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import glob, xml.etree.ElementTree as ET
+          total = failed = skipped = 0
+          rows = []
+          for f in glob.glob("appium-tests/target/surefire-reports/TEST-*.xml"):
+              suite = ET.parse(f).getroot()
+              for case in suite.iter("testcase"):
+                  total += 1
+                  state = "✅"
+                  if case.find("failure") is not None or case.find("error") is not None:
+                      failed += 1; state = "❌"
+                  elif case.find("skipped") is not None:
+                      skipped += 1; state = "⏭️"
+                  rows.append(f"| {state} | {case.get('classname','').split('.')[-1]} | {case.get('name')} | {case.get('time')}s |")
+          print(f"## API ${{ matrix.api-level }} — {total - failed - skipped} passed, {failed} failed, {skipped} skipped\n")
+          print("| | Class | Test | Time |\n|---|---|---|---|")
+          print("\n".join(sorted(rows)))
+          EOF
