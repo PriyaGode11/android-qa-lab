@@ -33,7 +33,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Unit tests and debug APK
-        working-directory: android-app
+        working-directory: android-qa-lab/android-app
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon testDebugUnitTest assembleDebug
@@ -41,13 +41,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
-          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+          path: android-qa-lab/android-app/app/build/outputs/apk/debug/app-debug.apk
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: unit-test-reports
-          path: android-app/app/build/reports/tests/
+          path: android-qa-lab/android-app/app/build/reports/tests/
 
   ui-regression:
     name: Appium (API ${{ matrix.api-level }})
@@ -114,17 +114,17 @@ jobs:
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            mkdir -p appium-tests/target/artifacts
+            mkdir -p android-qa-lab/appium-tests/target/artifacts
             adb logcat -c
-            mvn -B -f appium-tests/pom.xml test -Dsuite=$SUITE -Dapp.path=$GITHUB_WORKSPACE/apk/app-debug.apk; status=$?; adb logcat -d > appium-tests/target/artifacts/logcat.txt; exit $status
+            mvn -B -f android-qa-lab/appium-tests/pom.xml test -Dsuite=$SUITE -Dapp.path=$GITHUB_WORKSPACE/apk/app-debug.apk; status=$?; adb logcat -d > android-qa-lab/appium-tests/target/artifacts/logcat.txt; exit $status
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: appium-results-api-${{ matrix.api-level }}
           path: |
-            appium-tests/target/surefire-reports/
-            appium-tests/target/artifacts/
+            android-qa-lab/appium-tests/target/surefire-reports/
+            android-qa-lab/appium-tests/target/artifacts/
             appium.log
 
       - name: Publish test summary
@@ -134,7 +134,7 @@ jobs:
           import glob, xml.etree.ElementTree as ET
           total = failed = skipped = 0
           rows = []
-          for f in glob.glob("appium-tests/target/surefire-reports/TEST-*.xml"):
+          for f in glob.glob("android-qa-lab/appium-tests/target/surefire-reports/TEST-*.xml"):
               suite = ET.parse(f).getroot()
               for case in suite.iter("testcase"):
                   total += 1
