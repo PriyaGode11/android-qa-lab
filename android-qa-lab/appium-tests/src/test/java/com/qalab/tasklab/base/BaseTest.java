@@ -9,6 +9,7 @@ import io.appium.java_client.AppiumBy;
 import io.appium.java_client.android.AndroidDriver;
 import org.openqa.selenium.By;
 import org.openqa.selenium.ScreenOrientation;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriverException;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.testng.annotations.AfterClass;
@@ -25,7 +26,8 @@ import java.util.Map;
 public abstract class BaseTest {
 
     /** Cold starts on CI emulators can take a while, especially behind the splash screen. */
-    private static final Duration APP_LAUNCH_TIMEOUT = Duration.ofSeconds(45);
+    private static final Duration LAUNCH_ATTEMPT_TIMEOUT = Duration.ofSeconds(30);
+    private static final int MAX_LAUNCH_ATTEMPTS = 3;
 
     private static final By LOGIN_SCREEN = AppiumBy.id(TestConfig.APP_PACKAGE + ":id/login_title");
     private static final By TASK_SCREEN = AppiumBy.id(TestConfig.APP_PACKAGE + ":id/welcome_text");
@@ -74,15 +76,31 @@ public abstract class BaseTest {
     /**
      * Waits until the app has drawn its first real screen (login or task list).
      * While the splash screen is up, UiAutomator2 may fail to read the window at
-     * all and throw a server-side error, so those errors are retried rather than
-     * failing the test.
+     * all and throw a server-side error, so those errors are retried. If a busy
+     * emulator stalls a launch, the app is relaunched (up to three attempts).
      */
     protected void waitForAppLaunched() {
-        new WebDriverWait(driver(), APP_LAUNCH_TIMEOUT)
-                .pollingEvery(Duration.ofSeconds(1))
-                .ignoring(WebDriverException.class)
-                .withMessage("TaskLab did not finish launching")
-                .until(d -> !d.findElements(LOGIN_SCREEN).isEmpty()
-                        || !d.findElements(TASK_SCREEN).isEmpty());
+        for (int attempt = 1; ; attempt++) {
+            try {
+                new WebDriverWait(driver(), LAUNCH_ATTEMPT_TIMEOUT)
+                        .pollingEvery(Duration.ofSeconds(1))
+                        .ignoring(WebDriverException.class)
+                        .withMessage("TaskLab did not finish launching (attempt " + attempt + ")")
+                        .until(d -> !d.findElements(LOGIN_SCREEN).isEmpty()
+                                || !d.findElements(TASK_SCREEN).isEmpty());
+                return;
+            } catch (TimeoutException e) {
+                if (attempt >= MAX_LAUNCH_ATTEMPTS) {
+                    throw e;
+                }
+                System.out.println("  TaskLab not ready after attempt " + attempt + "; relaunching");
+                try {
+                    driver().terminateApp(TestConfig.APP_PACKAGE);
+                } catch (WebDriverException ignored) {
+                    // The process may already be gone.
+                }
+                driver().activateApp(TestConfig.APP_PACKAGE);
+            }
+        }
     }
 }
