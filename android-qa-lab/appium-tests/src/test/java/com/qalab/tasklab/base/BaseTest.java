@@ -5,12 +5,17 @@ import com.qalab.tasklab.driver.DriverFactory;
 import com.qalab.tasklab.driver.DriverManager;
 import com.qalab.tasklab.pages.LoginPage;
 import com.qalab.tasklab.pages.TaskListPage;
+import io.appium.java_client.AppiumBy;
 import io.appium.java_client.android.AndroidDriver;
+import org.openqa.selenium.By;
 import org.openqa.selenium.ScreenOrientation;
+import org.openqa.selenium.WebDriverException;
+import org.openqa.selenium.support.ui.WebDriverWait;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 
+import java.time.Duration;
 import java.util.Map;
 
 /**
@@ -18,6 +23,12 @@ import java.util.Map;
  * test method (isolated). No test depends on another test's state.
  */
 public abstract class BaseTest {
+
+    /** Cold starts on CI emulators can take a while, especially behind the splash screen. */
+    private static final Duration APP_LAUNCH_TIMEOUT = Duration.ofSeconds(45);
+
+    private static final By LOGIN_SCREEN = AppiumBy.id(TestConfig.APP_PACKAGE + ":id/login_title");
+    private static final By TASK_SCREEN = AppiumBy.id(TestConfig.APP_PACKAGE + ":id/welcome_text");
 
     @BeforeClass(alwaysRun = true)
     public void startSession() {
@@ -33,6 +44,7 @@ public abstract class BaseTest {
         // Equivalent to `adb shell pm clear`: wipes the session, lockout counter and tasks.
         driver.executeScript("mobile: clearApp", Map.of("appId", TestConfig.APP_PACKAGE));
         driver.activateApp(TestConfig.APP_PACKAGE);
+        waitForAppLaunched();
     }
 
     @AfterClass(alwaysRun = true)
@@ -56,5 +68,21 @@ public abstract class BaseTest {
     protected void restartApp() {
         driver().terminateApp(TestConfig.APP_PACKAGE);
         driver().activateApp(TestConfig.APP_PACKAGE);
+        waitForAppLaunched();
+    }
+
+    /**
+     * Waits until the app has drawn its first real screen (login or task list).
+     * While the splash screen is up, UiAutomator2 may fail to read the window at
+     * all and throw a server-side error, so those errors are retried rather than
+     * failing the test.
+     */
+    protected void waitForAppLaunched() {
+        new WebDriverWait(driver(), APP_LAUNCH_TIMEOUT)
+                .pollingEvery(Duration.ofSeconds(1))
+                .ignoring(WebDriverException.class)
+                .withMessage("TaskLab did not finish launching")
+                .until(d -> !d.findElements(LOGIN_SCREEN).isEmpty()
+                        || !d.findElements(TASK_SCREEN).isEmpty());
     }
 }
