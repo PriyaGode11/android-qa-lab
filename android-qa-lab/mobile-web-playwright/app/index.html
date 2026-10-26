@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#4f46e5">
+  <title>TaskLab</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="app">
+
+    <!-- Login view -->
+    <section id="login-view" class="view" hidden aria-labelledby="login-title">
+      <h1 id="login-title">Sign in to TaskLab</h1>
+      <form id="login-form" novalidate>
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" autocomplete="username"
+               autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next">
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password"
+               enterkeyhint="go">
+
+        <p id="login-error" class="error" role="alert" hidden></p>
+
+        <button type="submit" class="primary">Log in</button>
+      </form>
+      <p class="hint">Demo account: qa_user / Passw0rd!</p>
+    </section>
+
+    <!-- Task list view -->
+    <section id="tasks-view" class="view" hidden aria-labelledby="welcome">
+      <header class="topbar">
+        <h1 id="welcome"></h1>
+        <button type="button" id="logout" class="link">Log out</button>
+      </header>
+
+      <form id="task-form" class="add-row" novalidate>
+        <label for="task-input" class="visually-hidden">New task</label>
+        <input id="task-input" type="text" placeholder="New task" autocomplete="off"
+               autocapitalize="sentences" enterkeyhint="done">
+        <button type="submit" class="primary">Add</button>
+      </form>
+      <p id="task-error" class="error" role="alert" hidden></p>
+
+      <p id="summary" class="summary" aria-live="polite"></p>
+      <p id="empty-state" class="empty" hidden>Nothing here yet. Add your first task above.</p>
+
+      <ul id="task-list" class="task-list" aria-label="Tasks"></ul>
+
+      <button type="button" id="clear-completed" class="secondary">Clear completed</button>
+    </section>
+
+    <!-- Delete confirmation -->
+    <dialog id="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-message">
+      <h2 id="delete-title">Delete task?</h2>
+      <p id="delete-message"></p>
+      <div class="dialog-actions">
+        <button type="button" id="delete-cancel" class="secondary">Cancel</button>
+        <button type="button" id="delete-confirm" class="danger">Delete</button>
+      </div>
+    </dialog>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
