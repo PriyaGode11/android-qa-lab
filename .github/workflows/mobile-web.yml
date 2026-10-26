@@ -27,32 +27,57 @@ jobs:
   playwright:
     name: Playwright (Pixel 7, iPhone 14, Desktop)
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 20
+    # Microsoft's official image: browsers and system libraries are preinstalled.
+    # Its version must match @playwright/test in package.json.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
     defaults:
       run:
         working-directory: android-qa-lab/mobile-web-playwright
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install Playwright
+      - name: Install test runner
         run: npm install
 
-      - name: Install browsers (Chromium for Android, WebKit for iPhone)
-        run: npx playwright install --with-deps chromium webkit
-
       - name: Run regression suite
-        run: npx playwright test
+        # Stop early if the build is clearly broken instead of timing out 150 times.
+        run: npx playwright test --max-failures=10
         env:
+          HOME: /root
           RECORD_VIDEO: ${{ inputs.record_videos && '1' || '' }}
           PLAYWRIGHT_JUNIT_OUTPUT_NAME: test-results/junit.xml
 
       - name: Publish test summary
         if: always()
-        run: python3 scripts/summary.py test-results/junit.xml >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          node - >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          const fs = require('fs');
+          let xml = '';
+          try { xml = fs.readFileSync('test-results/junit.xml', 'utf8'); } catch (e) {}
+          if (!xml) { console.log('## Mobile web regression\n\nNo test report found.'); process.exit(0); }
+          const totals = {};
+          for (const m of xml.matchAll(/<testsuite\b[^>]*>/g)) {
+            const attr = (n) => (m[0].match(new RegExp(n + '="([^"]*)"')) || [])[1] || '0';
+            const d = attr('hostname');
+            const t = totals[d] || (totals[d] = { tests: 0, failed: 0, skipped: 0 });
+            t.tests += +attr('tests');
+            t.failed += +attr('failures') + +attr('errors');
+            t.skipped += +attr('skipped');
+          }
+          let failed = 0, passed = 0, skipped = 0;
+          const rows = Object.keys(totals).sort().map((d) => {
+            const t = totals[d], p = t.tests - t.failed - t.skipped;
+            failed += t.failed; passed += p; skipped += t.skipped;
+            return `| ${t.failed ? '❌' : '✅'} ${d} | ${p} | ${t.failed} | ${t.skipped} |`;
+          });
+          console.log(`## Mobile web regression: ${failed ? '❌ ' + failed + ' failed' : '✅ All tests passed'}\n`);
+          console.log('| Device | Passed | Failed | Skipped |\n|---|---|---|---|');
+          console.log(rows.join('\n'));
+          console.log(`| **Total** | **${passed}** | **${failed}** | **${skipped}** |`);
+          if (failed) console.log('\nDownload the **playwright-report** artifact and open `index.html` for screenshots, videos and traces.');
+          EOF
 
       - name: Upload HTML report
         if: always()
