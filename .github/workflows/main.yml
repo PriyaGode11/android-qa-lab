@@ -2,8 +2,14 @@ name: Android regression
 
 on:
   pull_request:
+    paths:
+      - "android-qa-lab/**"
+      - ".github/workflows/main.yml"
   push:
     branches: [main]
+    paths:
+      - "android-qa-lab/**"
+      - ".github/workflows/main.yml"
   schedule:
     - cron: "17 7 * * *"   # nightly full regression
   workflow_dispatch:
@@ -61,7 +67,7 @@ jobs:
           - api-level: 29
             target: default
           - api-level: 34
-            target: google_apis
+            target: default
     env:
       # Pull requests get the quick smoke gate; main, nightly and manual runs get everything.
       SUITE: ${{ inputs.suite || (github.event_name == 'pull_request' && 'testng-smoke.xml' || 'testng-regression.xml') }}
@@ -92,7 +98,7 @@ jobs:
       - name: Install Appium and the UiAutomator2 driver
         run: |
           npm install -g appium@2
-             appium driver install --source=npm appium-uiautomator2-driver@3
+          appium driver install --source=npm appium-uiautomator2-driver@3
           appium --version
 
       - name: Start Appium server
