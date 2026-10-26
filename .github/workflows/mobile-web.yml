@@ -4,11 +4,11 @@ on:
   push:
     branches: [main]
     paths:
-      - "mobile-web-playwright/**"
+      - "android-qa-lab/mobile-web-playwright/**"
       - ".github/workflows/mobile-web.yml"
   pull_request:
     paths:
-      - "mobile-web-playwright/**"
+      - "android-qa-lab/mobile-web-playwright/**"
       - ".github/workflows/mobile-web.yml"
   schedule:
     - cron: "37 7 * * *"   # nightly
@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 30
     defaults:
       run:
-        working-directory: mobile-web-playwright
+        working-directory: android-qa-lab/mobile-web-playwright
     steps:
       - uses: actions/checkout@v4
 
@@ -59,7 +59,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: mobile-web-playwright/playwright-report/
+          path: android-qa-lab/mobile-web-playwright/playwright-report/
           retention-days: 14
 
       - name: Upload screenshots, videos and traces
@@ -67,5 +67,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: mobile-web-playwright/test-results/
+          path: android-qa-lab/mobile-web-playwright/test-results/
           retention-days: 14
