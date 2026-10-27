@@ -60,7 +60,9 @@ test.describe('Monitoring: logs and traces', () => {
     await expect(monitoring.tile('Errors')).toHaveText('1');
     const entry = monitoring.logsWith('Simulated failure triggered from the Monitoring page');
     await expect(entry).toHaveAttribute('data-level', 'ERROR');
-    await expect(entry.locator('.log-stack')).toContainText('Error');
+    // Same shape in every browser: "Error: <message>" first, then where it happened.
+    await expect(entry.locator('.log-stack')).toContainText('Error: Simulated failure triggered from the Monitoring page');
+    await expect(entry.locator('.log-stack')).toContainText('app.js');
     await monitoring.status.selectOption('error');
     await expect(monitoring.traceList).toContainText('app.error');
   });
