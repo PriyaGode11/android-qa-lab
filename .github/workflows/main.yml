@@ -3,8 +3,11 @@ name: Android regression
 on:
   pull_request:
     paths:
-      - "android-qa-lab/**"
       - ".github/workflows/main.yml"
+      - "android-qa-lab/android-app/**"
+      - "android-qa-lab/appium-tests/**"
+      - ".github/workflows/main.yml"
+
   push:
     branches: [main]
     paths:
