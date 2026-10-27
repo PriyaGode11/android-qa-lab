@@ -71,10 +71,10 @@
     <h1>TaskLab Backend Test Results</h1>
     <span class="status failed">2 failed</span>
   </header>
-  <p class="meta">Run #1 · Oct 27, 2026, 6:59 PM UTC · commit <a href="https://github.com/PriyaGode11/android-qa-lab/commit/d52c241e57ccb9029bc8616d93983f1954992fd6">d52c241</a> · took 11.2s · JUnit 5 via Maven</p>
+  <p class="meta">Run #2 · Oct 27, 2026, 7:18 PM UTC · commit <a href="https://github.com/PriyaGode11/android-qa-lab/commit/ee0dcab5558233ddfc4cee411ec2998e73c101d0">ee0dcab</a> · took 13.5s · JUnit 5 via Maven</p>
   <nav class="links" aria-label="Related pages">
     <a class="primary" href="../backend-coverage/index.html">Code coverage report (JaCoCo)</a>
-    <a href="https://github.com/PriyaGode11/android-qa-lab/actions/runs/40564905455">This run on GitHub</a>
+    <a href="https://github.com/PriyaGode11/android-qa-lab/actions/runs/40567768255">This run on GitHub</a>
     <a href="../">Open the TaskLab app</a>
     <a href="../tests/">Mobile web results</a>
   </nav>
@@ -132,12 +132,13 @@ but some elements were not expected:
   </table></div>
 
   <h2>Trend</h2>
-  <p class="muted">The trend appears after the second run. Each push to main adds a point.</p>
+  <div class="chart-wrap"><svg viewBox="0 0 720 180" role="img" aria-label="Passed and failed tests over the last 2 runs"><line x1="40" x2="712" y1="154" y2="154" class="grid"/><text x="34" y="158" class="axis" text-anchor="end">0</text><line x1="40" x2="712" y1="80.95652173913044" y2="80.95652173913044" class="grid"/><text x="34" y="84.95652173913044" class="axis" text-anchor="end">35</text><line x1="40" x2="712" y1="10" y2="10" class="grid"/><text x="34" y="14" class="axis" text-anchor="end">69</text><g><title>Run #1 (d52c241): 67 passed, 2 failed</title><rect x="42" y="14.173913043478263" width="332" height="139.82608695652175" class="ok"/><rect x="42" y="10" width="332" height="4.173913043478263" class="bad"/><text x="208" y="172" class="axis" text-anchor="middle">#1</text></g><g><title>Run #2 (ee0dcab): 67 passed, 2 failed</title><rect x="378" y="14.173913043478263" width="332" height="139.82608695652175" class="ok"/><rect x="378" y="10" width="332" height="4.173913043478263" class="bad"/><text x="544" y="172" class="axis" text-anchor="middle">#2</text></g></svg></div>
+  <p class="legend"><span class="key ok"></span>Passed <span class="key bad"></span>Failed · last 2 runs</p>
 
   <h2>Slowest tests</h2>
   <div class="table-wrap"><table>
     <thead><tr><th>Test</th><th>Level</th><th class="num">Time</th></tr></thead>
-    <tbody><tr><td>API-17 rejected requests leave no audit entry</td><td>Integration tests (PostgreSQL)</td><td class="num">2.6s</td></tr><tr><td>API-08 each filter alone and combined returns the right tasks</td><td>Integration tests (PostgreSQL)</td><td class="num">1.1s</td></tr><tr><td>API-18 the audit log can be filtered by action and has no way to change entries</td><td>Integration tests (PostgreSQL)</td><td class="num">0.8s</td></tr><tr><td>API-09 summary and the overdue flag follow the rules (due today and done-late are not overdue)</td><td>Integration tests (PostgreSQL)</td><td class="num">0.7s</td></tr><tr><td>API-10 bad filter values are a 400 that says what is allowed</td><td>Integration tests (PostgreSQL)</td><td class="num">0.7s</td></tr><tr><td>API-07 the list is sorted by due date, tasks without a date last</td><td>Integration tests (PostgreSQL)</td><td class="num">0.6s</td></tr><tr><td>API-16 create, complete and delete each write exactly one audit entry, newest first</td><td>Integration tests (PostgreSQL)</td><td class="num">0.5s</td></tr><tr><td>WEB-05 a missing title is a 400 with the same message as the app</td><td>Unit &amp; web-layer tests</td><td class="num">0.5s</td></tr></tbody>
+    <tbody><tr><td>API-17 rejected requests leave no audit entry</td><td>Integration tests (PostgreSQL)</td><td class="num">2.9s</td></tr><tr><td>API-08 each filter alone and combined returns the right tasks</td><td>Integration tests (PostgreSQL)</td><td class="num">1.2s</td></tr><tr><td>API-18 the audit log can be filtered by action and has no way to change entries</td><td>Integration tests (PostgreSQL)</td><td class="num">1.0s</td></tr><tr><td>API-09 summary and the overdue flag follow the rules (due today and done-late are not overdue)</td><td>Integration tests (PostgreSQL)</td><td class="num">0.9s</td></tr><tr><td>API-10 bad filter values are a 400 that says what is allowed</td><td>Integration tests (PostgreSQL)</td><td class="num">0.8s</td></tr><tr><td>API-07 the list is sorted by due date, tasks without a date last</td><td>Integration tests (PostgreSQL)</td><td class="num">0.7s</td></tr><tr><td>WEB-05 a missing title is a 400 with the same message as the app</td><td>Unit &amp; web-layer tests</td><td class="num">0.7s</td></tr><tr><td>API-16 create, complete and delete each write exactly one audit entry, newest first</td><td>Integration tests (PostgreSQL)</td><td class="num">0.7s</td></tr></tbody>
   </table></div>
 
   <footer>Generated from JUnit XML reports by scripts/build-test-dashboard.mjs. History keeps the last 50 runs.</footer>
