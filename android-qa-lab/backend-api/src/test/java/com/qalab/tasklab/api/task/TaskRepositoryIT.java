@@ -8,6 +8,7 @@ import java.time.LocalDate;
 
 import jakarta.persistence.EntityManager;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +26,8 @@ import com.qalab.tasklab.api.support.PostgresContainer;
  * Database integration tests: the JPA mappings and constraints against a real PostgreSQL
  * (not an in-memory imitation), started by Testcontainers. Each test runs in a transaction
  * that is rolled back afterwards, so tests don't see each other's data.
+ * The container is shared with TaskApiIT, whose rows are really committed, so each test also
+ * starts from empty tables (inside its own transaction, so the clean-up is rolled back too).
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -37,6 +40,12 @@ class TaskRepositoryIT {
     @Autowired TaskRepository tasks;
     @Autowired AuditRepository audit;
     @Autowired EntityManager em;
+
+    @BeforeEach
+    void startFromEmptyTables() {
+        audit.deleteAllInBatch();
+        tasks.deleteAllInBatch();
+    }
 
     @Test
     @DisplayName("DB-01 every field survives a round trip through PostgreSQL (dates, timestamps, enum)")

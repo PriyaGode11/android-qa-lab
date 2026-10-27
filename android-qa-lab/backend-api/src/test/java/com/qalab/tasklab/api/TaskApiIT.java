@@ -13,6 +13,7 @@ import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -52,8 +53,14 @@ class TaskApiIT {
     void setUp() {
         RestAssured.port = port;
         RestAssured.basePath = "/api";
-        audit.deleteAll();
-        tasks.deleteAll();
+        cleanTables();
+    }
+
+    @AfterEach
+    void cleanTables() {
+        // These rows are really committed: leave the shared database empty for other test classes.
+        audit.deleteAllInBatch();
+        tasks.deleteAllInBatch();
     }
 
     private static RequestSpecification as(String user) {

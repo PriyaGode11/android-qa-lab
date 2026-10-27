@@ -69,7 +69,7 @@ curl -u qa_user:Passw0rd! http://localhost:8080/api/audit
 
 ## CI
 
-The **Backend** job in `.github/workflows/mobile-web.yml` runs `mvn verify` on GitHub's Ubuntu runner (Docker included), then the website gets:
+The pipeline `ci/backend.yml` (installed as `.github/workflows/backend.yml`) runs only when the backend changes. It runs `mvn verify` on GitHub's Ubuntu runner (Docker included), then the website gets:
 
 | Address | What it is |
 |---|---|
