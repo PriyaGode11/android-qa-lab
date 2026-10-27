@@ -19,6 +19,8 @@ export default defineConfig({
         ['github'],
         ['html', { open: 'never' }],
         ['junit', { outputFile: 'test-results/junit.xml' }],
+        // Feeds the test results dashboard (scripts/build-test-dashboard.mjs).
+        ['json', { outputFile: 'test-results/results.json' }],
       ]
     : [['list'], ['html', { open: 'never' }]],
 
@@ -27,9 +29,9 @@ export default defineConfig({
     // Same time zone and language everywhere, so dates and "overdue" never depend on the machine.
     timezoneId: 'America/Chicago',
     locale: 'en-US',
-    trace: 'retain-on-failure',
+    // RECORD_VIDEO=1 keeps a trace and a video of every test (for demos); otherwise only for failures.
+    trace: process.env.RECORD_VIDEO ? 'on' : 'retain-on-failure',
     screenshot: 'only-on-failure',
-    // RECORD_VIDEO=1 records every test (handy for demos); otherwise only failures.
     video: process.env.RECORD_VIDEO ? 'on' : 'retain-on-failure',
   },
 

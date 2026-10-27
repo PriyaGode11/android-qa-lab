@@ -41,6 +41,7 @@
         <a href="#/dashboard" data-route="dashboard">Dashboard</a>
         <a href="#/reports" data-route="reports">Reports</a>
         <a href="#/audit" data-route="audit" id="nav-audit">Audit</a>
+        <a href="#/monitoring" data-route="monitoring" id="nav-monitoring">Monitoring</a>
       </nav>
     </header>
 
@@ -214,6 +215,67 @@
 
       <p id="audit-count" class="summary" aria-live="polite"></p>
       <ul id="audit-list" class="audit" aria-label="Audit entries"></ul>
+    </section>
+
+    <!-- Monitoring view: the app's own logs and traces -->
+    <section id="monitoring-view" class="view" hidden aria-labelledby="monitoring-title">
+      <div class="section-head">
+        <h2 id="monitoring-title">Monitoring</h2>
+        <button type="button" id="m-trigger" class="secondary small">Trigger a test error</button>
+      </div>
+      <p class="note">Every action in TaskLab writes log lines and a trace of its steps. Use them to see what happened, how long each step took, and where errors came from.</p>
+
+      <div class="stats stats-5">
+        <div class="stat" role="group" aria-label="Traces"><span class="value" id="m-traces">0</span><span class="label">Traces</span></div>
+        <div class="stat" role="group" aria-label="Errors"><span class="value" id="m-errors">0</span><span class="label">Errors</span></div>
+        <div class="stat" role="group" aria-label="Warnings"><span class="value" id="m-warnings">0</span><span class="label">Warnings</span></div>
+        <div class="stat" role="group" aria-label="Average duration"><span class="value" id="m-avg">0</span><span class="label">Avg ms</span></div>
+        <div class="stat" role="group" aria-label="95th percentile duration"><span class="value" id="m-p95">0</span><span class="label">p95 ms</span></div>
+      </div>
+
+      <div class="monitor-grid">
+        <section class="panel" aria-labelledby="logs-title">
+          <h3 id="logs-title">Logs</h3>
+          <form id="log-filters" class="filters" aria-label="Log filters" novalidate>
+            <div>
+              <label for="m-level">Level</label>
+              <select id="m-level">
+                <option value="all">All levels</option>
+                <option value="ERROR">ERROR</option>
+                <option value="WARN">WARN</option>
+                <option value="INFO">INFO</option>
+              </select>
+            </div>
+            <div>
+              <label for="m-q">Search logs</label>
+              <input id="m-q" type="text" autocomplete="off" enterkeyhint="search">
+            </div>
+          </form>
+          <p id="logs-count" class="summary" aria-live="polite"></p>
+          <ul id="log-list" class="logs" aria-label="Log entries"></ul>
+        </section>
+
+        <section class="panel" aria-labelledby="traces-title">
+          <h3 id="traces-title">Traces</h3>
+          <form id="trace-filters" class="filters" aria-label="Trace filters" novalidate>
+            <div>
+              <label for="m-status">Trace status</label>
+              <select id="m-status">
+                <option value="all">All</option>
+                <option value="error">error</option>
+                <option value="warn">warn</option>
+                <option value="ok">ok</option>
+              </select>
+            </div>
+            <div>
+              <label for="m-name">Operation</label>
+              <select id="m-name"><option value="all">All operations</option></select>
+            </div>
+          </form>
+          <p id="traces-count" class="summary" aria-live="polite"></p>
+          <ul id="trace-list" class="traces" aria-label="Traces"></ul>
+        </section>
+      </div>
     </section>
 
     <!-- Confirmation dialog (shared) -->

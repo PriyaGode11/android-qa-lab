@@ -2,7 +2,7 @@ import { test, expect } from './support/fixtures';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { VALID_USER } from './support/data';
-import { SEED_TASKS, expectedMatches, expectedStats, manyTasks, seed, type Filters } from './support/seed';
+import { SEED_TASKS, appTraces, expectedMatches, expectedStats, manyTasks, seed, type Filters } from './support/seed';
 
 const sorted = (titles: string[]) => [...titles].sort();
 const titlesOf = (f: Filters) => sorted(expectedMatches(SEED_TASKS, f).map((t) => t.title));
@@ -133,16 +133,19 @@ test.describe('Dashboard with large data sets', () => {
     await expect(dashboard.showMoreButton).toBeHidden();
   });
 
-  test('DASH-12 filtering 1,000 tasks stays fast (under 2 seconds, including test overhead)', async ({ tasksPage, page, dashboard }) => {
+  test('DASH-12 filtering 1,000 tasks takes under 250 ms, measured by the app\'s own trace', async ({ tasksPage, page, dashboard }) => {
     await expect(tasksPage.welcome).toBeVisible();
     await seed(page, { tasks: manyTasks(1000) });
     await dashboard.open();
 
-    const started = Date.now();
     await dashboard.setFilters({ priority: 'high' });
     await expect(dashboard.stat('Total')).toHaveText('333');
-    // Generous budget: this catches a real slowdown (e.g. 10x) without failing on a busy CI machine.
-    expect(Date.now() - started).toBeLessThan(2000);
+
+    // Wall-clock time from the test would include the test tool's own overhead and vary with CI load.
+    // The app traces every filter change, so read the time the app itself spent.
+    const filterTrace = [...await appTraces(page)].reverse().find((t) => t.name === 'dashboard.filter')!;
+    expect(filterTrace.attrs.filters).toBe('priority=high');
+    expect(filterTrace.duration).toBeLessThan(250);
   });
 });
 

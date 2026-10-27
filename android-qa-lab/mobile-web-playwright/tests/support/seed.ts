@@ -48,7 +48,7 @@ export function manyTasks(count: number): Task[] {
  * Writes data straight into the app's storage and reloads, like seeding a test database
  * through an API. Much faster and more precise than typing 100 tasks through the UI.
  */
-export async function seed(page: Page, data: { tasks?: Task[]; schedules?: unknown[]; audit?: unknown[] }) {
+export async function seed(page: Page, data: { tasks?: Task[]; schedules?: unknown[]; audit?: unknown[]; logs?: unknown[]; traces?: unknown[] }) {
   await page.evaluate((d) => {
     for (const [key, value] of Object.entries(d)) localStorage.setItem(`tasklab.${key}`, JSON.stringify(value));
   }, data);
@@ -56,7 +56,7 @@ export async function seed(page: Page, data: { tasks?: Task[]; schedules?: unkno
 }
 
 /** Reads what the app actually stored: the source of truth tests compare the UI against. */
-export async function readStore<T>(page: Page, key: 'tasks' | 'audit' | 'schedules' | 'runs'): Promise<T[]> {
+export async function readStore<T>(page: Page, key: 'tasks' | 'audit' | 'schedules' | 'runs' | 'logs' | 'traces'): Promise<T[]> {
   return page.evaluate((k) => JSON.parse(localStorage.getItem(`tasklab.${k}`) || '[]'), key);
 }
 
@@ -91,3 +91,12 @@ export function expectedStats(tasks: Task[]) {
     overdue: tasks.filter(isOverdue).length,
   };
 }
+
+// ---- telemetry (Monitoring) ----
+
+export type LogEntry = { id: number; at: string; level: 'INFO' | 'WARN' | 'ERROR'; message: string; user: string; traceId: string | null; context: Record<string, unknown> };
+export type Span = { name: string; start: number; duration: number; status: 'ok' | 'warn' | 'error'; attrs: Record<string, unknown> };
+export type Trace = { traceId: string; name: string; at: string; user: string; status: 'ok' | 'warn' | 'error'; duration: number; attrs: Record<string, unknown>; spans: Span[] };
+
+export const appLogs = (page: Page) => readStore<LogEntry>(page, 'logs');
+export const appTraces = (page: Page) => readStore<Trace>(page, 'traces');

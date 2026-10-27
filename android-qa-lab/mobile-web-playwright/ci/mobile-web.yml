@@ -1,0 +1,155 @@
+name: Mobile web regression (Playwright)
+
+# Runs the Playwright suite, then publishes one website to GitHub Pages:
+#   /         the TaskLab app (with its Monitoring screen)
+#   /tests/   the test results dashboard (per device, per area, failures, trend)
+#   /report/  the full Playwright report (screenshots, videos, step-by-step traces)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android-qa-lab/mobile-web-playwright/**"
+      - ".github/workflows/mobile-web.yml"
+  pull_request:
+    paths:
+      - "android-qa-lab/mobile-web-playwright/**"
+      - ".github/workflows/mobile-web.yml"
+  schedule:
+    - cron: "37 7 * * *"   # nightly
+  workflow_dispatch:
+    inputs:
+      record_videos:
+        description: "Record a video and trace of every test (for demos)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Playwright (Pixel 7, iPhone 14, Desktop)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    # Microsoft's official image: browsers and system libraries are preinstalled.
+    # Its version must match @playwright/test in package.json.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    defaults:
+      run:
+        working-directory: android-qa-lab/mobile-web-playwright
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install test runner
+        run: npm install
+
+      - name: Run regression suite
+        # Stop early if the build is clearly broken instead of timing out hundreds of times.
+        run: npx playwright test --max-failures=10
+        env:
+          HOME: /root
+          RECORD_VIDEO: ${{ inputs.record_videos && '1' || '' }}
+
+      - name: Publish test summary
+        if: always()
+        run: |
+          node - >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          const fs = require('fs');
+          let xml = '';
+          try { xml = fs.readFileSync('test-results/junit.xml', 'utf8'); } catch (e) {}
+          if (!xml) { console.log('## Mobile web regression\n\nNo test report found.'); process.exit(0); }
+          const totals = {};
+          for (const m of xml.matchAll(/<testsuite\b[^>]*>/g)) {
+            const attr = (n) => (m[0].match(new RegExp(n + '="([^"]*)"')) || [])[1] || '0';
+            const d = attr('hostname');
+            const t = totals[d] || (totals[d] = { tests: 0, failed: 0, skipped: 0 });
+            t.tests += +attr('tests');
+            t.failed += +attr('failures') + +attr('errors');
+            t.skipped += +attr('skipped');
+          }
+          let failed = 0, passed = 0, skipped = 0;
+          const rows = Object.keys(totals).sort().map((d) => {
+            const t = totals[d], p = t.tests - t.failed - t.skipped;
+            failed += t.failed; passed += p; skipped += t.skipped;
+            return `| ${t.failed ? '❌' : '✅'} ${d} | ${p} | ${t.failed} | ${t.skipped} |`;
+          });
+          console.log(`## Mobile web regression: ${failed ? '❌ ' + failed + ' failed' : '✅ All tests passed'}\n`);
+          console.log('| Device | Passed | Failed | Skipped |\n|---|---|---|---|');
+          console.log(rows.join('\n'));
+          console.log(`| **Total** | **${passed}** | **${failed}** | **${skipped}** |`);
+          console.log('\nThe full results dashboard is published to GitHub Pages under /tests/.');
+          EOF
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: android-qa-lab/mobile-web-playwright/playwright-report/
+          retention-days: 14
+
+      - name: Upload screenshots, videos, traces and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: android-qa-lab/mobile-web-playwright/test-results/
+          retention-days: 14
+
+  publish:
+    name: Publish app, test dashboard and report
+    needs: test
+    # Publish from main even when tests fail, so the failures are visible on the dashboard.
+    if: always() && needs.test.result != 'cancelled' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: playwright-report
+          path: report
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: test-results
+          path: results
+
+      - name: Fetch earlier results for the trend chart
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          curl -fsSL "https://${owner}.github.io/${repo}/tests/history.json" -o history.json || echo "[]" > history.json
+
+      - name: Build the website
+        run: |
+          mkdir -p site
+          cp -r android-qa-lab/mobile-web-playwright/app/. site/
+          if [ -d report ]; then cp -r report site/report; fi
+          if [ -f results/results.json ]; then
+            node android-qa-lab/mobile-web-playwright/scripts/build-test-dashboard.mjs results/results.json history.json site/tests
+          fi
+          touch site/.nojekyll
+          ls site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

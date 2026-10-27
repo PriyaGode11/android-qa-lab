@@ -4,6 +4,7 @@ import { TaskListPage } from '../pages/TaskListPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { ReportsPage } from '../pages/ReportsPage';
 import { AuditPage } from '../pages/AuditPage';
+import { MonitoringPage } from '../pages/MonitoringPage';
 import { FIXED_NOW, VALID_USER, VIEWER_USER } from './data';
 
 /**
@@ -17,6 +18,7 @@ type Fixtures = {
   dashboard: DashboardPage;
   reports: ReportsPage;
   auditPage: AuditPage;
+  monitoring: MonitoringPage;
 };
 
 export const test = base.extend<Fixtures>({
@@ -44,6 +46,7 @@ export const test = base.extend<Fixtures>({
   dashboard: async ({ page }, use) => use(new DashboardPage(page)),
   reports: async ({ page }, use) => use(new ReportsPage(page)),
   auditPage: async ({ page }, use) => use(new AuditPage(page)),
+  monitoring: async ({ page }, use) => use(new MonitoringPage(page)),
 });
 
 export { expect } from '@playwright/test';

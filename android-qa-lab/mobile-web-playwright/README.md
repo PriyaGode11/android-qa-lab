@@ -1,6 +1,6 @@
 # TaskLab Mobile Web: Regression Testing with Playwright
 
-The web version of TaskLab (the same app as the native Android lab): tasks, a **dashboard with filters**, **scheduled reports** (time zones and daylight saving), an **audit log** and two **roles** (admin, view-only). A Playwright regression suite that runs on an **emulated Android phone (Pixel 7, Chromium)**, an **emulated iPhone 14 (WebKit, Safari's engine)** and **desktop Chrome**.
+The web version of TaskLab (the same app as the native Android lab): tasks, a **dashboard with filters**, **scheduled reports** (time zones and daylight saving), an **audit log**, a **Monitoring** screen with the app's own logs and traces, and two **roles** (admin, view-only). A Playwright regression suite that runs on an **emulated Android phone (Pixel 7, Chromium)**, an **emulated iPhone 14 (WebKit, Safari's engine)** and **desktop Chrome**.
 
 - **`app/`**: the mobile web app (plain HTML, CSS and JavaScript, no build step)
 - **`tests/`**: the Playwright suite in TypeScript (Page Object Model + fixtures)
@@ -12,11 +12,11 @@ The web version of TaskLab (the same app as the native Android lab): tasks, a **
 
 | Device | Tests run | Notes |
 |---|---|---|
-| Android - Pixel 7 (Chromium) | 109 | includes touch and rotation tests |
-| iPhone 14 (WebKit) | 109 | includes touch and rotation tests |
-| Desktop Chrome | 107 + 2 skipped | touch and rotation don't apply to desktop; uses the desktop layout |
+| Android - Pixel 7 (Chromium) | 121 | includes touch and rotation tests |
+| iPhone 14 (WebKit) | 121 | includes touch and rotation tests |
+| Desktop Chrome | 119 + 2 skipped | touch and rotation don't apply to desktop; uses the desktop layout |
 
-327 test runs per pipeline, 34 smoke tests per device. The browser clock is frozen (Mon 26 Oct 2026, 10:00 Chicago) and the time zone fixed, so dates, "overdue" and next-run times never depend on when or where the tests run.
+363 test runs per pipeline, 37 smoke tests per device. The browser clock is frozen (Mon 26 Oct 2026, 10:00 Chicago) and the time zone fixed, so dates, "overdue" and next-run times never depend on when or where the tests run.
 
 ### Real bugs the suite caught
 
@@ -89,6 +89,34 @@ Audit checks also run **inside** functional tests (AUTH-05, TASK-11, REP-01, REP
 | MOB-06 | Rotating to landscape keeps tasks and typed input | |
 | MOB-07 | Keyboard and password-manager hints on the login form | |
 | MOB-08 | Delete dialog fits on screen | |
+
+## Monitoring: the app's own logs and traces
+
+Admins get a **Monitoring** screen, like a small Datadog inside the app:
+
+- **Logs** with levels: INFO for normal actions, WARN for rejected input and failed sign-ins, ERROR for crashes (any uncaught JavaScript error is captured with its stack trace).
+- **Traces**: every operation (`auth.login`, `task.create`, `dashboard.filter`, `report.export`, `schedule.create`, `app.load`…) records its steps (spans) with timings, shown as a timeline.
+- Every log line links to its trace; tiles show trace count, errors, warnings, average and 95th-percentile duration.
+- Only the newest 500 logs and 200 traces are kept. Passwords are never written (tested by MON-09).
+- "Trigger a test error" creates a real uncaught error to demonstrate error capture.
+
+| Monitoring tests | MON-01 to 12 |
+|---|---|
+| Covers | login trace steps and linked log; failed sign-ins and lockout levels; validation = WARN not ERROR; uncaught errors captured with stack; every step fits inside its trace; no orphan log→trace links; tiles match stored data; filters; **no passwords in telemetry**; retention limits; viewer blocked; phone layout |
+
+The speed test DASH-12 uses the app's own `dashboard.filter` trace, so it measures the app, not the test tool, and doesn't flake under CI load.
+
+## Test results dashboard
+
+Every CI run on `main` publishes one website to GitHub Pages:
+
+| Address | What it is |
+|---|---|
+| `https://<user>.github.io/<repo>/` | the TaskLab app |
+| `https://<user>.github.io/<repo>/tests/` | **test results dashboard**: totals, failures with error messages, results per device and per area, trend over the last runs, slowest tests |
+| `https://<user>.github.io/<repo>/report/` | the full Playwright report: screenshots, videos and step-by-step traces for failures (for every test when run with "Record a video and trace") |
+
+The dashboard is built by `scripts/build-test-dashboard.mjs` from Playwright's JSON report; the trend keeps the last 50 runs. The workflow file is in `ci/mobile-web.yml` (copy it to `.github/workflows/mobile-web.yml` at the repository root).
 
 ## Design decisions
 
