@@ -47,6 +47,22 @@ export class TaskListPage {
     return this;
   }
 
+  /** Adds one task with a priority and/or due date (YYYY-MM-DD). */
+  async addTask(title: string, options: { priority?: 'Low' | 'Medium' | 'High'; due?: string } = {}) {
+    const before = await this.rows.count();
+    await this.taskInput.fill(title);
+    if (options.priority) await this.page.locator('#tasks-view').getByLabel('Priority').selectOption(options.priority);
+    if (options.due) await this.page.locator('#tasks-view').getByLabel('Due date').fill(options.due);
+    await this.addButton.click();
+    await expect(this.rows).toHaveCount(before + 1);
+    return this;
+  }
+
+  /** The priority / due-date line under a task's title. */
+  meta(title: string) {
+    return this.rows.filter({ has: this.page.getByText(title, { exact: true }) }).locator('.meta');
+  }
+
   /** Submits a title expected to be rejected; returns the error shown. */
   async tryAddTask(title: string) {
     await this.taskInput.fill(title);

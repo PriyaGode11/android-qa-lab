@@ -1,6 +1,6 @@
 # TaskLab Mobile Web: Regression Testing with Playwright
 
-The web version of TaskLab (the same app as the native Android lab), with a Playwright regression suite that runs on an **emulated Android phone (Pixel 7, Chromium)**, an **emulated iPhone 14 (WebKit, Safari's engine)** and **desktop Chrome**.
+The web version of TaskLab (the same app as the native Android lab): tasks, a **dashboard with filters**, **scheduled reports** (time zones and daylight saving), an **audit log** and two **roles** (admin, view-only). A Playwright regression suite that runs on an **emulated Android phone (Pixel 7, Chromium)**, an **emulated iPhone 14 (WebKit, Safari's engine)** and **desktop Chrome**.
 
 - **`app/`**: the mobile web app (plain HTML, CSS and JavaScript, no build step)
 - **`tests/`**: the Playwright suite in TypeScript (Page Object Model + fixtures)
@@ -12,13 +12,18 @@ The web version of TaskLab (the same app as the native Android lab), with a Play
 
 | Device | Tests run | Notes |
 |---|---|---|
-| Android - Pixel 7 (Chromium) | 50 | includes touch and rotation tests |
-| iPhone 14 (WebKit) | 50 | includes touch and rotation tests |
-| Desktop Chrome | 48 + 2 skipped | touch and rotation don't apply to desktop |
+| Android - Pixel 7 (Chromium) | 109 | includes touch and rotation tests |
+| iPhone 14 (WebKit) | 109 | includes touch and rotation tests |
+| Desktop Chrome | 107 + 2 skipped | touch and rotation don't apply to desktop; uses the desktop layout |
 
-148 test runs per pipeline. Checked locally with every test repeated three times in parallel (444 of 444 passed, none flaky).
+327 test runs per pipeline, 34 smoke tests per device. The browser clock is frozen (Mon 26 Oct 2026, 10:00 Chicago) and the time zone fixed, so dates, "overdue" and next-run times never depend on when or where the tests run.
 
-### A real bug the suite caught
+### Real bugs the suite caught
+
+- **Data left in the page after logout** (SESS-04), described below.
+- **Dashboard wider than an iPhone screen** (DASH-14): the date filters pushed the page sideways on a 390 px screen. Fixed in CSS.
+
+### The logout bug
 
 On its first run, `SESS-04` failed on every device. After logging out, the previous user's tasks were only **hidden** with CSS, not removed, so they were still in the page and readable through the browser's developer tools or a screen reader. The app now clears the data on logout, and the test guards against it coming back.
 
@@ -31,7 +36,14 @@ On its first run, `SESS-04` failed on every device. After logging out, the previ
 | Session & persistence | SESS-01 to 08 | survives reload; new tab; logout; Back after logout; direct URL while logged out; lockout survives reload; logout syncs across tabs |
 | Mobile experience | MOB-01 to 08 | mobile viewport; no sideways scrolling; 44×44 px touch targets; 16 px inputs (no iPhone zoom); tap gestures; rotation; keyboard and password-manager hints; dialog fits on screen |
 
-`@smoke` tests (21 per phone) are the critical path: run them with `npm run test:smoke`.
+| Dashboard | DASH-01 to 14 | numbers checked against the stored data; every filter alone and combined; one-day ranges; empty results; filters in the URL (reload, shared link, deep link through login); clear filters; 120-task paging; 1,000-task speed; phone layout |
+| Reports | REP-01 to 12 | CSV matches the dashboard; commas, quotes and accents; next run for daily/weekly/monthly; six time zones incl. half-hour offsets; daylight-saving change; pause/resume/delete; "Run now" delivery; persistence |
+| Audit | AUD-01 to 08 | exactly one entry per action, newest first; failed logins and lockout with the attempted name; before → after values; stored in UTC, shown in the viewer's time zone; read-only; filters; exports and schedules audited; HTML shown as text |
+| Roles | ROLE-01 to 06 | view-only user can't change tasks or schedules, has no audit access (link hidden, URL redirected), can still filter and export |
+
+Audit checks also run **inside** functional tests (AUTH-05, TASK-11, REP-01, REP-04, REP-10, REP-11): every lockout, delete, export or schedule change also proves its audit record, which makes audit coverage almost free.
+
+`@smoke` tests (34 per device) are the critical path: run them with `npm run test:smoke`.
 
 ### Full catalogue
 

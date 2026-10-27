@@ -1,5 +1,6 @@
 import { test, expect } from './support/fixtures';
 import { MSG } from './support/data';
+import { auditCount } from './support/seed';
 
 test.describe('Task management', () => {
   test('TASK-01 a new user sees the empty state and a disabled "Clear completed"', async ({ tasksPage }) => {
@@ -87,7 +88,7 @@ test.describe('Task management', () => {
     await expect(tasksPage.clearCompletedButton).toBeDisabled();
   });
 
-  test('TASK-11 deleting asks for confirmation, then removes only that task @smoke', async ({ tasksPage }) => {
+  test('TASK-11 deleting asks for confirmation, then removes only that task @smoke', async ({ tasksPage, page }) => {
     await tasksPage.addTasks('Keep me', 'Delete me');
 
     const dialog = await tasksPage.openDelete('Delete me');
@@ -97,6 +98,10 @@ test.describe('Task management', () => {
     await expect(dialog).toBeHidden();
     expect(await tasksPage.titles()).toEqual(['Keep me']);
     await expect(tasksPage.summary).toHaveText('1 task, 0 done');
+
+    // Audit check inside a functional test: exactly one deletion recorded, for the right task.
+    expect(await auditCount(page, 'TASK_DELETED')).toBe(1);
+    expect(await auditCount(page, 'TASK_DELETED', '"Delete me"')).toBe(1);
   });
 
   test('TASK-12 cancelling the delete dialog keeps the task', async ({ tasksPage }) => {
@@ -139,6 +144,17 @@ test.describe('Task management', () => {
 
     await page.evaluate(() => window.scrollTo(0, 0));
     await expect(tasksPage.checkbox('Task 1')).toBeInViewport();
+  });
+
+  test('TASK-17 priority and due date are shown, and past due dates are flagged overdue', async ({ tasksPage }) => {
+    // Today is 2026-10-26 (the clock is frozen in the fixtures).
+    await tasksPage.addTask('Ship release', { priority: 'High', due: '2026-10-30' });
+    await tasksPage.addTask('Fix login bug', { priority: 'Low', due: '2026-10-20' });
+    await tasksPage.addTask('No deadline');
+
+    await expect(tasksPage.meta('Ship release')).toHaveText('High · Due Oct 30, 2026');
+    await expect(tasksPage.meta('Fix login bug')).toHaveText('Low · Due Oct 20, 2026 · Overdue');
+    await expect(tasksPage.meta('No deadline')).toHaveText('Medium · No due date');
   });
 
   test('TASK-16 pressing Enter (the keyboard "Done" key) adds the task', async ({ tasksPage }) => {

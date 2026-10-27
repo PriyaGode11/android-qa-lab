@@ -26,22 +26,51 @@
 
         <button type="submit" class="primary">Log in</button>
       </form>
-      <p class="hint">Demo account: qa_user / Passw0rd!</p>
+      <p class="hint">Demo accounts: qa_user (admin) or qa_viewer (view only), password Passw0rd!</p>
     </section>
 
-    <!-- Task list view -->
-    <section id="tasks-view" class="view" hidden aria-labelledby="welcome">
-      <header class="topbar">
+    <!-- Shared header for signed-in screens -->
+    <header id="app-header" class="app-header" hidden>
+      <div class="topbar">
         <h1 id="welcome"></h1>
+        <span id="role-badge" class="badge"></span>
         <button type="button" id="logout" class="link">Log out</button>
-      </header>
+      </div>
+      <nav aria-label="Main" class="main-nav">
+        <a href="#/tasks" data-route="tasks">Tasks</a>
+        <a href="#/dashboard" data-route="dashboard">Dashboard</a>
+        <a href="#/reports" data-route="reports">Reports</a>
+        <a href="#/audit" data-route="audit" id="nav-audit">Audit</a>
+      </nav>
+    </header>
 
-      <form id="task-form" class="add-row" novalidate>
-        <label for="task-input" class="visually-hidden">New task</label>
-        <input id="task-input" type="text" placeholder="New task" autocomplete="off"
-               autocapitalize="sentences" enterkeyhint="done">
-        <button type="submit" class="primary">Add</button>
+    <!-- Task list view -->
+    <section id="tasks-view" class="view" hidden aria-labelledby="tasks-title">
+      <h2 id="tasks-title" class="visually-hidden">Tasks</h2>
+
+      <form id="task-form" novalidate>
+        <div class="add-row">
+          <label for="task-input" class="visually-hidden">New task</label>
+          <input id="task-input" type="text" placeholder="New task" autocomplete="off"
+                 autocapitalize="sentences" enterkeyhint="done">
+          <button type="submit" class="primary">Add</button>
+        </div>
+        <div class="add-options">
+          <div>
+            <label for="task-priority">Priority</label>
+            <select id="task-priority">
+              <option>Low</option>
+              <option selected>Medium</option>
+              <option>High</option>
+            </select>
+          </div>
+          <div>
+            <label for="task-due">Due date</label>
+            <input id="task-due" type="date">
+          </div>
+        </div>
       </form>
+      <p id="readonly-note" class="note" hidden>You have view-only access.</p>
       <p id="task-error" class="error" role="alert" hidden></p>
 
       <p id="summary" class="summary" aria-live="polite"></p>
@@ -52,13 +81,148 @@
       <button type="button" id="clear-completed" class="secondary">Clear completed</button>
     </section>
 
-    <!-- Delete confirmation -->
-    <dialog id="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-message">
-      <h2 id="delete-title">Delete task?</h2>
-      <p id="delete-message"></p>
+    <!-- Dashboard view -->
+    <section id="dashboard-view" class="view" hidden aria-labelledby="dashboard-title">
+      <h2 id="dashboard-title">Dashboard</h2>
+
+      <form id="filters" class="filters" aria-label="Filters" novalidate>
+        <div>
+          <label for="f-status">Status</label>
+          <select id="f-status">
+            <option value="all">All</option>
+            <option value="open">Open</option>
+            <option value="done">Done</option>
+          </select>
+        </div>
+        <div>
+          <label for="f-priority">Priority</label>
+          <select id="f-priority">
+            <option value="all">All</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        <div>
+          <label for="f-from">Due from</label>
+          <input id="f-from" type="date">
+        </div>
+        <div>
+          <label for="f-to">Due to</label>
+          <input id="f-to" type="date">
+        </div>
+        <div class="wide">
+          <label for="f-q">Search</label>
+          <input id="f-q" type="text" autocomplete="off" enterkeyhint="search">
+        </div>
+        <div class="filter-actions wide">
+          <button type="button" id="clear-filters" class="secondary">Clear filters</button>
+          <button type="button" id="export-csv" class="secondary">Export CSV</button>
+        </div>
+      </form>
+
+      <div class="stats">
+        <div class="stat" role="group" aria-label="Total"><span class="value" id="stat-total">0</span><span class="label">Total</span></div>
+        <div class="stat" role="group" aria-label="Open"><span class="value" id="stat-open">0</span><span class="label">Open</span></div>
+        <div class="stat" role="group" aria-label="Done"><span class="value" id="stat-done">0</span><span class="label">Done</span></div>
+        <div class="stat" role="group" aria-label="Overdue"><span class="value" id="stat-overdue">0</span><span class="label">Overdue</span></div>
+      </div>
+
+      <p id="results-count" class="summary" aria-live="polite"></p>
+      <p id="results-empty" class="empty" hidden>No tasks match these filters.</p>
+      <ul id="results" class="results" aria-label="Matching tasks"></ul>
+      <button type="button" id="show-more" class="secondary" hidden>Show more</button>
+    </section>
+
+    <!-- Reports view -->
+    <section id="reports-view" class="view" hidden aria-labelledby="reports-title">
+      <h2 id="reports-title">Scheduled reports</h2>
+
+      <form id="schedule-form" class="card" aria-label="New schedule" novalidate>
+        <label for="s-name">Report name</label>
+        <input id="s-name" type="text" autocomplete="off">
+
+        <div class="grid-2">
+          <div>
+            <label for="s-frequency">Frequency</label>
+            <select id="s-frequency">
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div>
+            <label for="s-time">Time</label>
+            <input id="s-time" type="time" value="09:00">
+          </div>
+          <div id="s-weekday-field" hidden>
+            <label for="s-weekday">Day of week</label>
+            <select id="s-weekday">
+              <option value="1">Monday</option><option value="2">Tuesday</option>
+              <option value="3">Wednesday</option><option value="4">Thursday</option>
+              <option value="5">Friday</option><option value="6">Saturday</option>
+              <option value="0">Sunday</option>
+            </select>
+          </div>
+          <div id="s-day-field" hidden>
+            <label for="s-day">Day of month</label>
+            <select id="s-day"></select>
+          </div>
+          <div class="wide">
+            <label for="s-zone">Time zone</label>
+            <select id="s-zone">
+              <option>America/Chicago</option>
+              <option>America/New_York</option>
+              <option>America/Los_Angeles</option>
+              <option>Europe/London</option>
+              <option>Asia/Kolkata</option>
+              <option>UTC</option>
+            </select>
+          </div>
+        </div>
+        <p id="schedule-error" class="error" role="alert" hidden></p>
+        <button type="submit" class="primary">Add schedule</button>
+      </form>
+      <p id="reports-readonly" class="note" hidden>You have view-only access. Ask an admin to change schedules.</p>
+
+      <p id="schedules-empty" class="empty" hidden>No scheduled reports yet.</p>
+      <ul id="schedules" class="schedules" aria-label="Schedules"></ul>
+
+      <h3>Delivery history</h3>
+      <p id="runs-empty" class="empty" hidden>No reports delivered yet.</p>
+      <ul id="runs" class="runs" aria-label="Delivery history"></ul>
+    </section>
+
+    <!-- Audit view -->
+    <section id="audit-view" class="view" hidden aria-labelledby="audit-title">
+      <h2 id="audit-title">Audit log</h2>
+
+      <form id="audit-filters" class="filters" aria-label="Audit filters" novalidate>
+        <div>
+          <label for="a-action">Action</label>
+          <select id="a-action"><option value="all">All actions</option></select>
+        </div>
+        <div>
+          <label for="a-user">User</label>
+          <select id="a-user"><option value="all">All users</option></select>
+        </div>
+        <div class="wide">
+          <label for="a-q">Search details</label>
+          <input id="a-q" type="text" autocomplete="off" enterkeyhint="search">
+        </div>
+      </form>
+
+      <p id="audit-count" class="summary" aria-live="polite"></p>
+      <ul id="audit-list" class="audit" aria-label="Audit entries"></ul>
+    </section>
+
+    <!-- Confirmation dialog (shared) -->
+    <dialog id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-message"></p>
       <div class="dialog-actions">
-        <button type="button" id="delete-cancel" class="secondary">Cancel</button>
-        <button type="button" id="delete-confirm" class="danger">Delete</button>
+        <button type="button" id="confirm-cancel" class="secondary">Cancel</button>
+        <button type="button" id="confirm-ok" class="danger">Delete</button>
       </div>
     </dialog>
   </main>

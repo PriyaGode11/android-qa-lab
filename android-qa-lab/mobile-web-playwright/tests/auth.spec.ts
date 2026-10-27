@@ -1,5 +1,6 @@
 import { test, expect } from './support/fixtures';
 import { MSG, VALID_USER } from './support/data';
+import { auditCount } from './support/seed';
 
 const { username: USER, password: PASS } = VALID_USER;
 
@@ -47,11 +48,15 @@ test.describe('Authentication', () => {
     await expect(loginPage.username).toHaveValue(USER);
   });
 
-  test('AUTH-05 account locks after three failures, even for the correct password @smoke', async ({ loginPage }) => {
+  test('AUTH-05 account locks after three failures, even for the correct password @smoke', async ({ loginPage, page }) => {
     expect.soft(await loginPage.attemptLogin(USER, 'bad-1')).toBe(MSG.INVALID_CREDENTIALS);
     expect.soft(await loginPage.attemptLogin(USER, 'bad-2')).toBe(MSG.INVALID_CREDENTIALS);
     expect.soft(await loginPage.attemptLogin(USER, 'bad-3')).toBe(MSG.ACCOUNT_LOCKED);
     expect.soft(await loginPage.attemptLogin(USER, PASS)).toBe(MSG.ACCOUNT_LOCKED);
+
+    // Audit check inside a functional test: the lockout must leave exactly one trace.
+    expect(await auditCount(page, 'LOGIN_FAILED')).toBe(3);
+    expect(await auditCount(page, 'ACCOUNT_LOCKED')).toBe(1);
   });
 
   test('AUTH-06 blank-field errors do not count toward the lockout', async ({ loginPage }) => {

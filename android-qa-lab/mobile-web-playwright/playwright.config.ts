@@ -24,6 +24,9 @@ export default defineConfig({
 
   use: {
     baseURL: `http://localhost:${PORT}`,
+    // Same time zone and language everywhere, so dates and "overdue" never depend on the machine.
+    timezoneId: 'America/Chicago',
+    locale: 'en-US',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     // RECORD_VIDEO=1 records every test (handy for demos); otherwise only failures.
