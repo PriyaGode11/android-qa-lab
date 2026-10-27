@@ -1,0 +1,220 @@
+name: Regression (web + backend)
+
+# Three test suites, run side by side:
+#   mobile  - Playwright: Pixel 7, iPhone 14, desktop Chrome   (android-qa-lab/mobile-web-playwright)
+#   desktop - Playwright: Chrome, Firefox, Safari               (android-qa-lab/desktop-web-playwright)
+#   backend - JUnit 5: unit, web-layer, API and PostgreSQL tests (android-qa-lab/backend-api)
+# Then one website is published to GitHub Pages:
+#   /                   the TaskLab app
+#   /tests/             mobile web results       /report/            its Playwright report
+#   /desktop-tests/     desktop web results      /desktop-report/    its Playwright report
+#   /backend-tests/     backend results          /backend-coverage/  JaCoCo code coverage
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android-qa-lab/mobile-web-playwright/**"
+      - "android-qa-lab/desktop-web-playwright/**"
+      - "android-qa-lab/backend-api/**"
+      - ".github/workflows/mobile-web.yml"
+  pull_request:
+    paths:
+      - "android-qa-lab/mobile-web-playwright/**"
+      - "android-qa-lab/desktop-web-playwright/**"
+      - "android-qa-lab/backend-api/**"
+      - ".github/workflows/mobile-web.yml"
+  schedule:
+    - cron: "37 7 * * *"   # nightly
+  workflow_dispatch:
+    inputs:
+      record_videos:
+        description: "Record a video and trace of every test (for demos)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.suite.title }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    # Microsoft's official image: Chromium, Firefox and WebKit plus their system libraries.
+    # Its version must match @playwright/test in both package.json files.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - { id: mobile, dir: mobile-web-playwright, title: "Mobile web (Pixel 7, iPhone 14, Desktop Chrome)" }
+          - { id: desktop, dir: desktop-web-playwright, title: "Desktop web (Chrome, Firefox, Safari)" }
+    defaults:
+      run:
+        working-directory: android-qa-lab/${{ matrix.suite.dir }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install test runner
+        run: npm install
+
+      - name: Run regression suite
+        run: npx playwright test --max-failures=15
+        env:
+          HOME: /root
+          RECORD_VIDEO: ${{ inputs.record_videos && '1' || '' }}
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.suite.id }}-playwright-report
+          path: android-qa-lab/${{ matrix.suite.dir }}/playwright-report/
+          retention-days: 14
+
+      - name: Upload screenshots, videos, traces and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.suite.id }}-test-results
+          path: android-qa-lab/${{ matrix.suite.dir }}/test-results/
+          retention-days: 14
+
+  backend:
+    name: Backend (JUnit 5, MockMvc, REST Assured, PostgreSQL)
+    # A normal runner (not the Playwright container): Testcontainers needs the runner's Docker.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: android-qa-lab/backend-api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Docker version (Testcontainers starts PostgreSQL with it)
+        run: docker version --format 'Docker {{.Server.Version}}, API {{.Server.APIVersion}} (min {{.Server.MinAPIVersion}})'
+
+      - name: Unit, web-layer and integration tests + coverage
+        # test = unit + web-layer (*Test), verify = integration (*IT) + JaCoCo report
+        run: mvn -B -ntp verify
+
+      - name: Publish test summary
+        if: always()
+        run: |
+          python3 - >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          import glob, xml.etree.ElementTree as ET
+          print("## Backend tests\n\n| Level | Passed | Failed | Skipped |\n|---|---|---|---|")
+          for folder, label in [("surefire-reports", "Unit & web-layer"), ("failsafe-reports", "Integration (PostgreSQL)")]:
+              p = f = s = 0
+              for path in glob.glob(f"target/{folder}/TEST-*.xml"):
+                  for case in ET.parse(path).getroot().iter("testcase"):
+                      if case.find("failure") is not None or case.find("error") is not None: f += 1
+                      elif case.find("skipped") is not None: s += 1
+                      else: p += 1
+              print(f"| {'❌' if f else '✅'} {label} | {p} | {f} | {s} |")
+          EOF
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: |
+            android-qa-lab/backend-api/target/surefire-reports/
+            android-qa-lab/backend-api/target/failsafe-reports/
+          retention-days: 14
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: android-qa-lab/backend-api/target/site/jacoco/
+          retention-days: 14
+
+  publish:
+    name: Publish app, dashboards and reports
+    needs: [test, backend]
+    # Publish from main even when tests fail, so the failures are visible on the dashboards.
+    if: always() && needs.test.result != 'cancelled' && needs.backend.result != 'cancelled' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: artifacts
+
+      - name: Fetch earlier results for the trend charts
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          base="https://${owner}.github.io/${repo}"
+          curl -fsSL "$base/tests/history.json" -o mobile-history.json || echo "[]" > mobile-history.json
+          curl -fsSL "$base/desktop-tests/history.json" -o desktop-history.json || echo "[]" > desktop-history.json
+          curl -fsSL "$base/backend-tests/history.json" -o backend-history.json || echo "[]" > backend-history.json
+
+      - name: Build the website
+        run: |
+          gen=android-qa-lab/mobile-web-playwright/scripts/build-test-dashboard.mjs
+          mkdir -p site
+          cp -r android-qa-lab/mobile-web-playwright/app/. site/
+
+          if [ -d artifacts/mobile-playwright-report ]; then cp -r artifacts/mobile-playwright-report site/report; fi
+          if [ -d artifacts/desktop-playwright-report ]; then cp -r artifacts/desktop-playwright-report site/desktop-report; fi
+
+          if [ -f artifacts/mobile-test-results/results.json ]; then
+            DASHBOARD_TITLE="TaskLab Mobile Web Test Results" REPORT_DIR=report \
+            OTHER_LINK_HREF=../desktop-tests/ OTHER_LINK_TEXT="Desktop web results" \
+            node "$gen" artifacts/mobile-test-results/results.json mobile-history.json site/tests
+          else
+            echo "::warning::No mobile results.json, so /tests/ was not built"
+          fi
+
+          if [ -f artifacts/desktop-test-results/results.json ]; then
+            DASHBOARD_TITLE="TaskLab Desktop Web Test Results" REPORT_DIR=desktop-report \
+            OTHER_LINK_HREF=../tests/ OTHER_LINK_TEXT="Mobile web results" \
+            node "$gen" artifacts/desktop-test-results/results.json desktop-history.json site/desktop-tests
+          else
+            echo "::warning::No desktop results.json, so /desktop-tests/ was not built"
+          fi
+
+          if [ -d artifacts/backend-test-results ]; then
+            DASHBOARD_TITLE="TaskLab Backend Test Results" REPORT_DIR=backend-coverage \
+            REPORT_LINK_TEXT="Code coverage report (JaCoCo)" \
+            OTHER_LINK_HREF=../tests/ OTHER_LINK_TEXT="Mobile web results" \
+            node "$gen" artifacts/backend-test-results backend-history.json site/backend-tests
+          else
+            echo "::warning::No backend test reports, so /backend-tests/ was not built"
+          fi
+          if [ -d artifacts/backend-coverage ]; then cp -r artifacts/backend-coverage site/backend-coverage; fi
+
+          touch site/.nojekyll
+          ls site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
