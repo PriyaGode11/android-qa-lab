@@ -1,0 +1,128 @@
+name: Desktop web tests (Playwright)
+
+# Runs when the desktop suite changes, or the app it tests (which lives in mobile-web-playwright/app).
+# Publishes to the website (gh-pages branch), touching only its own parts:
+#   /desktop-tests/   desktop results page    /desktop-report/   full Playwright report
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android-qa-lab/desktop-web-playwright/**"
+      - "android-qa-lab/mobile-web-playwright/app/**"
+      - "android-qa-lab/mobile-web-playwright/server.js"
+      - ".github/workflows/desktop-web.yml"
+  pull_request:
+    paths:
+      - "android-qa-lab/desktop-web-playwright/**"
+      - "android-qa-lab/mobile-web-playwright/app/**"
+      - "android-qa-lab/mobile-web-playwright/server.js"
+      - ".github/workflows/desktop-web.yml"
+  schedule:
+    - cron: "47 7 * * *"   # nightly
+  workflow_dispatch:
+    inputs:
+      record_videos:
+        description: "Record a video and trace of every test (for demos)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Playwright (Chrome, Firefox, Safari)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    defaults:
+      run:
+        working-directory: android-qa-lab/desktop-web-playwright
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install test runner
+        run: npm install
+
+      - name: Run regression suite
+        run: npx playwright test --max-failures=15
+        env:
+          HOME: /root
+          RECORD_VIDEO: ${{ inputs.record_videos && '1' || '' }}
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: android-qa-lab/desktop-web-playwright/playwright-report/
+          retention-days: 14
+
+      - name: Upload screenshots, videos, traces and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: android-qa-lab/desktop-web-playwright/test-results/
+          retention-days: 14
+
+  publish:
+    name: Publish desktop results
+    needs: test
+    if: always() && needs.test.result != 'cancelled' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-website
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      OWNED: "desktop-tests desktop-report"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: artifacts
+
+      - name: Get the current website
+        run: |
+          url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if ! git clone --quiet --depth 1 --branch gh-pages "$url" pages; then
+            echo "No website branch yet: creating gh-pages"
+            git init --quiet -b gh-pages pages
+            git -C pages remote add origin "$url"
+          fi
+
+      - name: Build this pipeline's pages
+        run: |
+          mkdir -p stage
+          if [ -d artifacts/playwright-report ]; then cp -r artifacts/playwright-report stage/desktop-report; fi
+          if [ -f artifacts/test-results/results.json ]; then
+            history=pages/desktop-tests/history.json; [ -f "$history" ] || history=-
+            DASHBOARD_TITLE="TaskLab Desktop Web Test Results" REPORT_DIR=desktop-report \
+            OTHER_LINK_HREF=../tests/ OTHER_LINK_TEXT="Mobile web results" \
+            node android-qa-lab/mobile-web-playwright/scripts/build-test-dashboard.mjs \
+              artifacts/test-results/results.json "$history" stage/desktop-tests
+          else
+            echo "::warning::No results.json, so /desktop-tests/ was not rebuilt"
+          fi
+
+      - name: Publish (replaces only this pipeline's parts)
+        run: |
+          for p in $OWNED; do rm -rf "pages/$p"; done
+          cp -r stage/. pages/
+          touch pages/.nojekyll
+          cd pages
+          git add -A
+          if git diff --cached --quiet; then echo "Nothing changed"; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit --quiet -m "Publish desktop web results (run ${GITHUB_RUN_NUMBER})"
+          git push --quiet origin gh-pages
+          echo "### Published" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}/desktop-tests/" >> "$GITHUB_STEP_SUMMARY"

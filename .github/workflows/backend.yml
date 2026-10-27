@@ -1,0 +1,141 @@
+name: Backend tests (JUnit 5)
+
+# Runs only when the backend changes.
+# Publishes to the website (gh-pages branch), touching only its own parts:
+#   /backend-tests/   backend results page    /backend-coverage/   JaCoCo code coverage
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android-qa-lab/backend-api/**"
+      - ".github/workflows/backend.yml"
+  pull_request:
+    paths:
+      - "android-qa-lab/backend-api/**"
+      - ".github/workflows/backend.yml"
+  schedule:
+    - cron: "57 7 * * *"   # nightly
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit, web layer, API and PostgreSQL tests
+    # A normal runner: Testcontainers starts PostgreSQL with the runner's Docker.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: android-qa-lab/backend-api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Docker version (Testcontainers starts PostgreSQL with it)
+        run: docker version --format 'Docker {{.Server.Version}}, API {{.Server.APIVersion}} (min {{.Server.MinAPIVersion}})'
+
+      - name: Unit, web-layer and integration tests + coverage
+        # test = unit + web layer (*Test); verify = integration (*IT) + JaCoCo report
+        run: mvn -B -ntp verify
+
+      - name: Publish test summary
+        if: always()
+        run: |
+          python3 - >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          import glob, xml.etree.ElementTree as ET
+          print("## Backend tests\n\n| Level | Passed | Failed | Skipped |\n|---|---|---|---|")
+          for folder, label in [("surefire-reports", "Unit & web layer"), ("failsafe-reports", "Integration (PostgreSQL)")]:
+              p = f = s = 0
+              for path in glob.glob(f"target/{folder}/TEST-*.xml"):
+                  for case in ET.parse(path).getroot().iter("testcase"):
+                      if case.find("failure") is not None or case.find("error") is not None: f += 1
+                      elif case.find("skipped") is not None: s += 1
+                      else: p += 1
+              print(f"| {'❌' if f else '✅'} {label} | {p} | {f} | {s} |")
+          EOF
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: |
+            android-qa-lab/backend-api/target/surefire-reports/
+            android-qa-lab/backend-api/target/failsafe-reports/
+          retention-days: 14
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: android-qa-lab/backend-api/target/site/jacoco/
+          retention-days: 14
+
+  publish:
+    name: Publish backend results
+    needs: test
+    if: always() && needs.test.result != 'cancelled' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-website
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      OWNED: "backend-tests backend-coverage"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: artifacts
+
+      - name: Get the current website
+        run: |
+          url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if ! git clone --quiet --depth 1 --branch gh-pages "$url" pages; then
+            echo "No website branch yet: creating gh-pages"
+            git init --quiet -b gh-pages pages
+            git -C pages remote add origin "$url"
+          fi
+
+      - name: Build this pipeline's pages
+        run: |
+          mkdir -p stage
+          if [ -d artifacts/backend-coverage ]; then cp -r artifacts/backend-coverage stage/backend-coverage; fi
+          if [ -d artifacts/backend-test-results ]; then
+            history=pages/backend-tests/history.json; [ -f "$history" ] || history=-
+            DASHBOARD_TITLE="TaskLab Backend Test Results" REPORT_DIR=backend-coverage \
+            REPORT_LINK_TEXT="Code coverage report (JaCoCo)" \
+            OTHER_LINK_HREF=../tests/ OTHER_LINK_TEXT="Mobile web results" \
+            node android-qa-lab/mobile-web-playwright/scripts/build-test-dashboard.mjs \
+              artifacts/backend-test-results "$history" stage/backend-tests
+          else
+            echo "::warning::No backend test reports, so /backend-tests/ was not rebuilt"
+          fi
+
+      - name: Publish (replaces only this pipeline's parts)
+        run: |
+          for p in $OWNED; do rm -rf "pages/$p"; done
+          cp -r stage/. pages/
+          touch pages/.nojekyll
+          cd pages
+          git add -A
+          if git diff --cached --quiet; then echo "Nothing changed"; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit --quiet -m "Publish backend results (run ${GITHUB_RUN_NUMBER})"
+          git push --quiet origin gh-pages
+          echo "### Published" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}/backend-tests/" >> "$GITHUB_STEP_SUMMARY"
