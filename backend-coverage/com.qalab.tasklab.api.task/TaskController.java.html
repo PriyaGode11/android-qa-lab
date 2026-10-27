@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TaskController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">TaskLab API</a> &gt; <a href="index.source.html" class="el_package">com.qalab.tasklab.api.task</a> &gt; <span class="el_source">TaskController.java</span></div><h1>TaskController.java</h1><pre class="source lang-java linenums">package com.qalab.tasklab.api.task;
+
+import java.net.URI;
+import java.security.Principal;
+import java.time.LocalDate;
+import java.util.List;
+
+import jakarta.validation.Valid;
+
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.qalab.tasklab.api.task.TaskDtos.CreateTaskRequest;
+import com.qalab.tasklab.api.task.TaskDtos.TaskFilter;
+import com.qalab.tasklab.api.task.TaskDtos.TaskResponse;
+import com.qalab.tasklab.api.task.TaskDtos.TaskSummary;
+import com.qalab.tasklab.api.task.TaskDtos.UpdateTaskRequest;
+
+/**
+ * GET    /api/tasks?status=&amp;priority=&amp;from=&amp;to=&amp;q=   list with dashboard filters
+ * GET    /api/tasks/summary                           total / open / done / overdue
+ * GET    /api/tasks/{id}                              one task
+ * POST   /api/tasks                                   create   (admin)
+ * PATCH  /api/tasks/{id}   {&quot;done&quot;: true|false}       complete or reopen (admin)
+ * DELETE /api/tasks/{id}                              delete   (admin)
+ */
+@RestController
+@RequestMapping(&quot;/api/tasks&quot;)
+public class TaskController {
+
+    private final TaskService service;
+
+<span class="fc" id="L42">    public TaskController(TaskService service) {</span>
+<span class="fc" id="L43">        this.service = service;</span>
+<span class="fc" id="L44">    }</span>
+
+    @GetMapping
+    public List&lt;TaskResponse&gt; list(
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) String priority,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+        @RequestParam(required = false) String q) {
+<span class="fc" id="L53">        return service.list(new TaskFilter(status, priority, from, to, q));</span>
+    }
+
+    @GetMapping(&quot;/summary&quot;)
+    public TaskSummary summary() {
+<span class="fc" id="L58">        return service.summary();</span>
+    }
+
+    @GetMapping(&quot;/{id}&quot;)
+    public TaskResponse get(@PathVariable long id) {
+<span class="fc" id="L63">        return service.get(id);</span>
+    }
+
+    @PostMapping
+    public ResponseEntity&lt;TaskResponse&gt; create(@Valid @RequestBody CreateTaskRequest request, Principal user) {
+<span class="fc" id="L68">        TaskResponse created = service.create(request, user.getName());</span>
+<span class="fc" id="L69">        return ResponseEntity.created(URI.create(&quot;/api/tasks/&quot; + created.id())).body(created);</span>
+    }
+
+    @PatchMapping(&quot;/{id}&quot;)
+    public TaskResponse update(@PathVariable long id, @RequestBody UpdateTaskRequest request, Principal user) {
+<span class="fc" id="L74">        return service.update(id, request, user.getName());</span>
+    }
+
+    @DeleteMapping(&quot;/{id}&quot;)
+    public ResponseEntity&lt;Void&gt; delete(@PathVariable long id, Principal user) {
+<span class="fc" id="L79">        service.delete(id, user.getName());</span>
+<span class="fc" id="L80">        return ResponseEntity.noContent().build();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

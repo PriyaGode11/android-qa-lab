@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ApiExceptionHandler.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">TaskLab API</a> &gt; <a href="index.source.html" class="el_package">com.qalab.tasklab.api.error</a> &gt; <span class="el_source">ApiExceptionHandler.java</span></div><h1>ApiExceptionHandler.java</h1><pre class="source lang-java linenums">package com.qalab.tasklab.api.error;
+
+import java.time.Instant;
+
+import jakarta.servlet.http.HttpServletRequest;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+
+/** Every error leaves the API in the same JSON shape, with a message a person can act on. */
+@RestControllerAdvice
+<span class="fc" id="L17">public class ApiExceptionHandler {</span>
+
+<span class="fc" id="L19">    public record ApiError(int status, String error, String message, String path, Instant timestamp) {</span>
+    }
+
+    @ExceptionHandler(ApiException.class)
+    public ResponseEntity&lt;ApiError&gt; handle(ApiException ex, HttpServletRequest request) {
+<span class="fc" id="L24">        return body(ex.getStatus(), ex.getMessage(), request);</span>
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity&lt;ApiError&gt; handle(MethodArgumentNotValidException ex, HttpServletRequest request) {
+<span class="fc" id="L29">        String message = ex.getBindingResult().getFieldErrors().stream()</span>
+<span class="fc" id="L30">            .map(e -&gt; e.getDefaultMessage())</span>
+<span class="fc" id="L31">            .findFirst()</span>
+<span class="fc" id="L32">            .orElse(&quot;Invalid request&quot;);</span>
+<span class="fc" id="L33">        return body(HttpStatus.BAD_REQUEST, message, request);</span>
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity&lt;ApiError&gt; handle(HttpMessageNotReadableException ex, HttpServletRequest request) {
+<span class="fc" id="L38">        Throwable cause = ex.getMostSpecificCause();</span>
+<span class="fc bfc" id="L39" title="All 2 branches covered.">        String detail = cause instanceof IllegalArgumentException ? cause.getMessage() : &quot;malformed JSON&quot;;</span>
+<span class="fc" id="L40">        return body(HttpStatus.BAD_REQUEST, &quot;Invalid request body: &quot; + detail, request);</span>
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity&lt;ApiError&gt; handle(MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+<span class="fc" id="L45">        return body(HttpStatus.BAD_REQUEST, &quot;Invalid value for '&quot; + ex.getName() + &quot;': &quot; + ex.getValue(), request);</span>
+    }
+
+    private static ResponseEntity&lt;ApiError&gt; body(HttpStatus status, String message, HttpServletRequest request) {
+<span class="fc" id="L49">        return ResponseEntity.status(status)</span>
+<span class="fc" id="L50">            .body(new ApiError(status.value(), status.getReasonPhrase(), message, request.getRequestURI(), Instant.now()));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

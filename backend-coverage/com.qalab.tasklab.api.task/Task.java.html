@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Task.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">TaskLab API</a> &gt; <a href="index.source.html" class="el_package">com.qalab.tasklab.api.task</a> &gt; <span class="el_source">Task.java</span></div><h1>Task.java</h1><pre class="source lang-java linenums">package com.qalab.tasklab.api.task;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Locale;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+
+/**
+ * A task. The database itself enforces two rules as a safety net under the service:
+ * titles are at most 40 characters, and unique ignoring letter case (via title_key).
+ */
+@Entity
+@Table(name = &quot;tasks&quot;, uniqueConstraints = @UniqueConstraint(name = &quot;uk_tasks_title_key&quot;, columnNames = &quot;title_key&quot;))
+public class Task {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, length = TaskRules.MAX_TITLE_LENGTH)
+    private String title;
+
+    /** Lower-case copy of the title, used for the case-insensitive unique constraint. */
+    @Column(name = &quot;title_key&quot;, nullable = false, length = TaskRules.MAX_TITLE_LENGTH)
+    private String titleKey;
+
+    @Column(nullable = false)
+    private boolean done;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private Priority priority;
+
+    @Column(name = &quot;due_date&quot;)
+    private LocalDate due;
+
+    @Column(name = &quot;created_by&quot;, nullable = false, length = 50)
+    private String createdBy;
+
+    @Column(name = &quot;created_at&quot;, nullable = false)
+    private Instant createdAt;
+
+<span class="fc" id="L52">    protected Task() {</span>
+        // for JPA
+<span class="fc" id="L54">    }</span>
+
+<span class="fc" id="L56">    public Task(String title, Priority priority, LocalDate due, String createdBy, Instant createdAt) {</span>
+<span class="fc" id="L57">        this.title = title;</span>
+<span class="fc" id="L58">        this.titleKey = keyOf(title);</span>
+<span class="fc" id="L59">        this.priority = priority;</span>
+<span class="fc" id="L60">        this.due = due;</span>
+<span class="fc" id="L61">        this.createdBy = createdBy;</span>
+<span class="fc" id="L62">        this.createdAt = createdAt;</span>
+<span class="fc" id="L63">    }</span>
+
+    public static String keyOf(String title) {
+<span class="fc" id="L66">        return title.toLowerCase(Locale.ROOT);</span>
+    }
+
+<span class="fc" id="L69">    public Long getId() { return id; }</span>
+<span class="fc" id="L70">    public String getTitle() { return title; }</span>
+<span class="fc" id="L71">    public String getTitleKey() { return titleKey; }</span>
+<span class="fc" id="L72">    public boolean isDone() { return done; }</span>
+<span class="fc" id="L73">    public Priority getPriority() { return priority; }</span>
+<span class="fc" id="L74">    public LocalDate getDue() { return due; }</span>
+<span class="fc" id="L75">    public String getCreatedBy() { return createdBy; }</span>
+<span class="fc" id="L76">    public Instant getCreatedAt() { return createdAt; }</span>
+
+<span class="fc" id="L78">    public void setDone(boolean done) { this.done = done; }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

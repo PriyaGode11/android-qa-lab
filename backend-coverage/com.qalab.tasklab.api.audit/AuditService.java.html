@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AuditService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">TaskLab API</a> &gt; <a href="index.source.html" class="el_package">com.qalab.tasklab.api.audit</a> &gt; <span class="el_source">AuditService.java</span></div><h1>AuditService.java</h1><pre class="source lang-java linenums">package com.qalab.tasklab.api.audit;
+
+import java.time.Clock;
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class AuditService {
+
+<span class="fc" id="L12">    public record AuditResponse(Long id, String occurredAt, String user, String action, String details, String before, String after) {</span>
+    }
+
+    private final AuditRepository repository;
+    private final Clock clock;
+
+<span class="fc" id="L18">    public AuditService(AuditRepository repository, Clock clock) {</span>
+<span class="fc" id="L19">        this.repository = repository;</span>
+<span class="fc" id="L20">        this.clock = clock;</span>
+<span class="fc" id="L21">    }</span>
+
+    @Transactional
+    public void record(String user, String action, String details) {
+<span class="fc" id="L25">        record(user, action, details, null, null);</span>
+<span class="fc" id="L26">    }</span>
+
+    @Transactional
+    public void record(String user, String action, String details, String before, String after) {
+<span class="fc" id="L30">        repository.save(new AuditEntry(clock.instant(), user, action, details, before, after));</span>
+<span class="fc" id="L31">    }</span>
+
+    /** Newest first; optionally only one action. */
+    @Transactional(readOnly = true)
+    public List&lt;AuditResponse&gt; list(String action) {
+<span class="pc bpc" id="L36" title="1 of 4 branches missed.">        List&lt;AuditEntry&gt; entries = action == null || action.isBlank()</span>
+<span class="fc" id="L37">            ? repository.findAllByOrderByIdDesc()</span>
+<span class="fc" id="L38">            : repository.findByActionOrderByIdDesc(action.strip());</span>
+<span class="fc" id="L39">        return entries.stream()</span>
+<span class="fc" id="L40">            .map(e -&gt; new AuditResponse(e.getId(), e.getOccurredAt().toString(), e.getUsername(), e.getAction(),</span>
+<span class="fc" id="L41">                e.getDetails(), e.getBefore(), e.getAfter()))</span>
+<span class="fc" id="L42">            .toList();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>
