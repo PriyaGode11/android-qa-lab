@@ -1,0 +1,19 @@
+{
+  "name": "tasklab-mobile-web-playwright",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mobile web regression suite for TaskLab, built with Playwright",
+  "scripts": {
+    "start": "node server.js",
+    "test": "playwright test",
+    "test:android": "playwright test --project=\"Android - Pixel 7\"",
+    "test:iphone": "playwright test --project=\"iPhone 14\"",
+    "test:smoke": "playwright test --grep @smoke",
+    "test:headed": "playwright test --project=\"Android - Pixel 7\" --headed --workers=1",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}
