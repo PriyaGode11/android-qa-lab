@@ -239,7 +239,11 @@
   function captureError(message, error, extra) {
     const tr = startTrace('app.error');
     tr.span('uncaught exception', (sp) => { sp.status = 'error'; sp.attrs.message = message; });
-    const stack = error && error.stack ? String(error.stack).split('\n').slice(0, 5).join('\n') : '';
+    // Chrome's stack starts with "Error: message"; Safari's starts straight with "@file:line".
+    // Always lead with the name and message so logs read the same in every browser.
+    let stack = error && error.stack ? String(error.stack).split('\n').slice(0, 5).join('\n') : '';
+    const headline = error && error.name ? `${error.name}: ${error.message}` : '';
+    if (headline && !stack.startsWith(headline)) stack = `${headline}\n${stack}`;
     tr.log('ERROR', message || 'Unknown error', { ...(extra || {}), stack });
     tr.end('error');
   }
