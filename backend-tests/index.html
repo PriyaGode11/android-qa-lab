@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TaskLab Backend Test Results</title>
+<style>
+  :root {
+    --bg: #f5f6fa; --surface: #ffffff; --text: #1d2130; --muted: #5d6478; --border: #dcdfe8;
+    --accent: #4f46e5; --ok: #2e7d4f; --bad: #c62828; --flaky: #b26a00; --grid: #e6e8ef;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #12141b; --surface: #1b1e28; --text: #eceef4; --muted: #a2a8b8; --border: #333847;
+      --accent: #8b85ff; --ok: #5fcf8a; --bad: #ff7a73; --flaky: #f0b45a; --grid: #2a2e3b;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #12141b; --surface: #1b1e28; --text: #eceef4; --muted: #a2a8b8; --border: #333847;
+    --accent: #8b85ff; --ok: #5fcf8a; --bad: #ff7a73; --flaky: #f0b45a; --grid: #2a2e3b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1120px; margin: 0 auto; padding: 24px max(16px, env(safe-area-inset-right)) 48px max(16px, env(safe-area-inset-left)); }
+  h1 { font-size: 1.6rem; margin: 0; text-wrap: balance; }
+  h2 { font-size: 1.1rem; margin: 32px 0 12px; }
+  a { color: var(--accent); }
+  .muted { color: var(--muted); }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+  .status { font: 700 .8rem/1 var(--mono); text-transform: uppercase; letter-spacing: .06em; padding: 6px 10px; border-radius: 999px; border: 1.5px solid currentColor; }
+  .status.passed { color: var(--ok); } .status.failed { color: var(--bad); } .status.flaky { color: var(--flaky); }
+  .meta { margin: 6px 0 0; color: var(--muted); font-size: .9rem; }
+  .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .links a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); text-decoration: none; font-weight: 600; }
+  .links a.primary { background: var(--accent); color: var(--surface); border-color: var(--accent); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-top: 24px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; }
+  .tile .v { font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .tile .l { color: var(--muted); font-size: .85rem; }
+  .tile.bad .v { color: var(--bad); } .tile.ok .v { color: var(--ok); } .tile.flaky .v { color: var(--flaky); }
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 10px 14px; border-top: 1px solid var(--border); white-space: nowrap; }
+  thead th { border-top: none; color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+  td.num, th.num { text-align: right; }
+  td.bar { width: 40%; min-width: 140px; }
+  .stack { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--grid); }
+  .seg.ok { background: var(--ok); } .seg.bad { background: var(--bad); } .seg.flaky { background: var(--flaky); }
+  .zero { color: var(--muted); }
+  .fail { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--bad); border-radius: 12px; padding: 12px 16px; margin-bottom: 10px; }
+  .fail.flaky { border-left-color: var(--flaky); }
+  .fail h3 { font-size: .95rem; margin: 0 0 2px; overflow-wrap: anywhere; }
+  .fail .where { color: var(--muted); font-size: .85rem; }
+  .fail pre { font: .78rem/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0; color: var(--bad); }
+  .empty-ok { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; color: var(--ok); font-weight: 600; }
+  .chart-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; overflow-x: auto; }
+  svg { width: 100%; min-width: 480px; height: auto; display: block; }
+  svg .grid { stroke: var(--grid); } svg .axis { fill: var(--muted); font: 11px var(--mono); }
+  svg .ok { fill: var(--ok); } svg .bad { fill: var(--bad); }
+  .legend { color: var(--muted); font-size: .85rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .key { width: 12px; height: 12px; border-radius: 3px; display: inline-block; } .key.ok { background: var(--ok); } .key.bad { background: var(--bad); margin-left: 10px; }
+  footer { margin-top: 40px; color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>TaskLab Backend Test Results</h1>
+    <span class="status failed">2 failed</span>
+  </header>
+  <p class="meta">Run #1 · Oct 27, 2026, 6:59 PM UTC · commit <a href="https://github.com/PriyaGode11/android-qa-lab/commit/d52c241e57ccb9029bc8616d93983f1954992fd6">d52c241</a> · took 11.2s · JUnit 5 via Maven</p>
+  <nav class="links" aria-label="Related pages">
+    <a class="primary" href="../backend-coverage/index.html">Code coverage report (JaCoCo)</a>
+    <a href="https://github.com/PriyaGode11/android-qa-lab/actions/runs/40564905455">This run on GitHub</a>
+    <a href="../">Open the TaskLab app</a>
+    <a href="../tests/">Mobile web results</a>
+  </nav>
+
+  <section class="tiles" aria-label="Totals">
+    <div class="tile "><span class="v">69</span><span class="l">Test runs</span></div>
+    <div class="tile ok"><span class="v">67</span><span class="l">Passed</span></div>
+    <div class="tile bad"><span class="v">2</span><span class="l">Failed</span></div>
+    <div class="tile "><span class="v">0</span><span class="l">Flaky</span></div>
+    <div class="tile "><span class="v">0</span><span class="l">Skipped</span></div>
+    <div class="tile bad"><span class="v">97.1%</span><span class="l">Pass rate</span></div>
+  </section>
+
+  <h2>Failures</h2>
+  
+  <article class="fail">
+    <h3>Repositories on PostgreSQL › DB-01 every field survives a round trip through PostgreSQL (dates, timestamps, enum)</h3>
+    <div class="where">Repositories on PostgreSQL · Integration tests (PostgreSQL)</div>
+    <pre>could not execute statement [ERROR: duplicate key value violates unique constraint &quot;uk_tasks_title_key&quot;
+  Detail: Key (title_key)=(renew passport) already exists.] [insert into tasks (created_at,created_by,done,due_date,priority,title,title_key) values (?,?,?,?,?,?,?)]; SQL [insert into tasks (created_at,created_by,done,due_date,priority,title,title_key) values (?,?,?,?,?,?,?)]; constraint [uk_tasks_title_key]
+org.springframework.dao.DataIntegrityViolationException: 
+could not execute statement [ERROR: duplicate key value violates unique constraint &quot;uk_tasks_title_key&quot;
+  Detail: Key (title_key)=(renew passport) already exists.] [insert into tasks (created_at,created_by,done,due_date,priority,title,title_key) values (?,?,?,?,?,?,?)]; SQL [insert into tasks (created_at,created_by,done,due_date,priority,title,title_key) values (?,?,?,?,?,?,?)]; constraint [uk_tasks_title_key]
+	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.convertHibernateAccessException(HibernateJpaDialect.java:294)
+	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.convertHibernateAccessException(HibernateJpaDialect.java:256)
+	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.translateExceptionIfPossible(HibernateJpaDialect.java:241)</pre>
+    <a href="../backend-coverage/index.html">Open in the report (screenshot, video, trace)</a>
+  </article>
+  <article class="fail">
+    <h3>Repositories on PostgreSQL › DB-05 audit entries come back newest first, with before and after values</h3>
+    <div class="where">Repositories on PostgreSQL · Integration tests (PostgreSQL)</div>
+    <pre>
+Expecting actual:
+  [&quot;TASK_COMPLETED&quot;, &quot;TASK_CREATED&quot;, &quot;TASK_CREATED&quot;]
+to contain exactly (and in same order):
+  [&quot;TASK_COMPLETED&quot;, &quot;TASK_CREATED&quot;]
+but some elements were not expected:
+  [&quot;TASK_CREATED&quot;]
+</pre>
+    <a href="../backend-coverage/index.html">Open in the report (screenshot, video, trace)</a>
+  </article>
+
+  
+
+  <h2>By test level</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Level</th><th class="num">Passed</th><th class="num">Failed</th><th class="num">Flaky</th><th class="num">Skipped</th><th class="num">Pass rate</th><th>Result</th></tr></thead>
+    <tbody><tr><td>Integration tests (PostgreSQL)</td><td class="num">31</td><td class="num ">2</td><td class="num zero">0</td><td class="num zero">0</td><td class="num">93.9%</td><td class="bar"><div class="stack" role="img" aria-label="31 passed, 2 failed, 0 flaky"><span class="seg ok" style="width:93.93939393939394%"></span><span class="seg bad" style="width:6.0606060606060606%"></span></div></td></tr><tr><td>Unit &amp; web-layer tests</td><td class="num">36</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num">100%</td><td class="bar"><div class="stack" role="img" aria-label="36 passed, 0 failed, 0 flaky"><span class="seg ok" style="width:100%"></span></div></td></tr></tbody>
+  </table></div>
+
+  <h2>By area</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Area</th><th class="num">Test runs</th><th class="num">Passed</th><th class="num">Failed</th><th class="num">Flaky</th><th>Result</th></tr></thead>
+    <tbody><tr><td>Audit trail</td><td class="num">3</td><td class="num">3</td><td class="num zero">0</td><td class="num zero">0</td><td class="bar"><div class="stack" role="img" aria-label="3 passed, 0 failed, 0 flaky"><span class="seg ok" style="width:100%"></span></div></td></tr><tr><td>Security</td><td class="num">10</td><td class="num">10</td><td class="num zero">0</td><td class="num zero">0</td><td class="bar"><div class="stack" role="img" aria-label="10 passed, 0 failed, 0 flaky"><span class="seg ok" style="width:100%"></span></div></td></tr><tr><td>Changing and deleting</td><td class="num">3</td><td class="num">3</td><td class="num zero">0</td><td class="num zero">0</td><td class="bar"><div class="stack" role="img" aria-label="3 passed, 0 failed, 0 flaky"><span class="seg ok" style="width:100%"></span></div></td></tr><tr><td>Reading, filtering and summary</td><td class="num">4</td><td class="num">4</td><td class="num zero">0</td><td class="num zero">0</td><td class="bar"><div class="stack" role="img" aria-label="4 passed, 0 failed, 0 flaky"><span class="seg ok" style="width:100%"></span></div></td></tr><tr><td>Creating tasks</td><td class="num">8</td><td class="num">8</td><td class="num zero">0</td><td class="num zero">0</td><td class="bar"><div class="stack" role="img" aria-label="8 passed, 0 failed, 0 flaky"><span class="seg ok" style="width:100%"></span></div></td></tr><tr><td>Repositories on PostgreSQL</td><td class="num">5</td><td class="num">3</td><td class="num ">2</td><td class="num zero">0</td><td class="bar"><div class="stack" role="img" aria-label="3 passed, 2 failed, 0 flaky"><span class="seg ok" style="width:60%"></span><span class="seg bad" style="width:40%"></span></div></td></tr><tr><td>Tasks API: web layer</td><td class="num">9</td><td class="num">9</td><td class="num zero">0</td><td class="num zero">0</td><td class="bar"><div class="stack" role="img" aria-label="9 passed, 0 failed, 0 flaky"><span class="seg ok" style="width:100%"></span></div></td></tr><tr><td>Task rules</td><td class="num">17</td><td class="num">17</td><td class="num zero">0</td><td class="num zero">0</td><td class="bar"><div class="stack" role="img" aria-label="17 passed, 0 failed, 0 flaky"><span class="seg ok" style="width:100%"></span></div></td></tr><tr><td>Task service</td><td class="num">10</td><td class="num">10</td><td class="num zero">0</td><td class="num zero">0</td><td class="bar"><div class="stack" role="img" aria-label="10 passed, 0 failed, 0 flaky"><span class="seg ok" style="width:100%"></span></div></td></tr></tbody>
+  </table></div>
+
+  <h2>Trend</h2>
+  <p class="muted">The trend appears after the second run. Each push to main adds a point.</p>
+
+  <h2>Slowest tests</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Test</th><th>Level</th><th class="num">Time</th></tr></thead>
+    <tbody><tr><td>API-17 rejected requests leave no audit entry</td><td>Integration tests (PostgreSQL)</td><td class="num">2.6s</td></tr><tr><td>API-08 each filter alone and combined returns the right tasks</td><td>Integration tests (PostgreSQL)</td><td class="num">1.1s</td></tr><tr><td>API-18 the audit log can be filtered by action and has no way to change entries</td><td>Integration tests (PostgreSQL)</td><td class="num">0.8s</td></tr><tr><td>API-09 summary and the overdue flag follow the rules (due today and done-late are not overdue)</td><td>Integration tests (PostgreSQL)</td><td class="num">0.7s</td></tr><tr><td>API-10 bad filter values are a 400 that says what is allowed</td><td>Integration tests (PostgreSQL)</td><td class="num">0.7s</td></tr><tr><td>API-07 the list is sorted by due date, tasks without a date last</td><td>Integration tests (PostgreSQL)</td><td class="num">0.6s</td></tr><tr><td>API-16 create, complete and delete each write exactly one audit entry, newest first</td><td>Integration tests (PostgreSQL)</td><td class="num">0.5s</td></tr><tr><td>WEB-05 a missing title is a 400 with the same message as the app</td><td>Unit &amp; web-layer tests</td><td class="num">0.5s</td></tr></tbody>
+  </table></div>
+
+  <footer>Generated from JUnit XML reports by scripts/build-test-dashboard.mjs. History keeps the last 50 runs.</footer>
+</main>
+</body>
+</html>
