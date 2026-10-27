@@ -140,7 +140,7 @@
                     </execution>
                     <execution>
                         <id>report</id>
-                        <phase>verify</phase>
+                        <phase>post-integration-test</phase>  <!-- before the pass/fail check, so coverage is made even when tests fail -->
                         <goals>
                             <goal>report</goal>
                         </goals>
