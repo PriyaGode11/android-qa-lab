@@ -1,16 +1,23 @@
 #!/usr/bin/env node
 /**
- * Builds the test results dashboard (one static HTML page) from Playwright's JSON report.
+ * Builds the test results dashboard (one static HTML page) from test reports.
  *
- *   node scripts/build-test-dashboard.mjs <results.json> <history.json|-> <output dir>
+ *   node scripts/build-test-dashboard.mjs <results> <history.json|-> <output dir>
  *
- * - results.json : written by the 'json' reporter in playwright.config.ts
+ * - results      : Playwright's JSON report (a .json file), or a folder of JUnit XML reports
+ *                  (Maven surefire/failsafe: every TEST-*.xml below it is read)
  * - history.json : results of earlier runs (for the trend chart); "-" or a missing file = no history
  * - output dir   : receives index.html and the updated history.json
  *
  * No dependencies. GitHub Actions environment variables (run number, commit…) are used when present.
+ *
+ * Optional settings (environment variables), so one script serves the mobile and desktop suites:
+ *   DASHBOARD_TITLE   page title            (default "TaskLab Test Results")
+ *   REPORT_DIR        sibling folder holding the Playwright HTML report (default "report")
+ *   OTHER_LINK_HREF / OTHER_LINK_TEXT   an extra link, e.g. to the other suite's dashboard
+ *   REPORT_LINK_TEXT  text of the main report link (default "Full report: screenshots, videos, traces")
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, readdirSync } from 'node:fs';
 import { join, basename } from 'node:path';
 
 const [resultsPath, historyPath, outDir] = process.argv.slice(2);
@@ -19,7 +26,8 @@ if (!resultsPath || !outDir) {
   process.exit(1);
 }
 
-const report = JSON.parse(readFileSync(resultsPath, 'utf8'));
+const isJUnitFolder = statSync(resultsPath).isDirectory();
+const report = isJUnitFolder ? { suites: [], stats: {} } : JSON.parse(readFileSync(resultsPath, 'utf8'));
 let history = [];
 if (historyPath && historyPath !== '-' && existsSync(historyPath)) {
   try {
@@ -29,6 +37,8 @@ if (historyPath && historyPath !== '-' && existsSync(historyPath)) {
 }
 
 const env = process.env;
+const TITLE = env.DASHBOARD_TITLE || 'TaskLab Test Results';
+const REPORT_DIR = env.REPORT_DIR || 'report';
 const run = {
   number: Number(env.GITHUB_RUN_NUMBER) || (history.length ? (history.at(-1).run || 0) + 1 : 1),
   date: report.stats?.startTime || new Date().toISOString(),
@@ -46,6 +56,10 @@ const AREAS = {
   'auth.spec.ts': 'Authentication', 'tasks.spec.ts': 'Tasks', 'session.spec.ts': 'Session',
   'mobile.spec.ts': 'Mobile experience', 'dashboard.spec.ts': 'Dashboard', 'reports.spec.ts': 'Reports',
   'audit.spec.ts': 'Audit log', 'roles.spec.ts': 'Roles', 'monitoring.spec.ts': 'Monitoring',
+  // desktop suite
+  'auth.setup.ts': 'Setup (saved sign-in)', 'e2e.spec.ts': 'End-to-end journeys', 'keyboard.spec.ts': 'Keyboard-only use',
+  'accessibility.spec.ts': 'Accessibility', 'navigation.spec.ts': 'Browser navigation', 'tabs.spec.ts': 'Multiple tabs',
+  'layout.spec.ts': 'Desktop layout',
 };
 
 const stripAnsi = (s) => String(s || '').replace(/\u001b\[[0-9;]*m/g, '');
@@ -80,6 +94,62 @@ function walk(suite, file, titles) {
 }
 for (const s of report.suites || []) walk(s, s.file, []);
 
+// ---- JUnit XML (Java: surefire = unit and web-layer tests, failsafe = integration tests) ----
+
+const JUNIT_GROUPS = { 'surefire-reports': 'Unit & web-layer tests', 'failsafe-reports': 'Integration tests (PostgreSQL)' };
+const JAVA_AREAS = {
+  TaskRulesTest: 'Unit: task rules', TaskServiceTest: 'Unit: service logic (Mockito)',
+  TaskControllerTest: 'Web layer: controller + security (MockMvc)',
+  TaskRepositoryIT: 'Database: repositories on PostgreSQL', TaskApiIT: 'API: full app over HTTP (REST Assured)',
+};
+const xmlDecode = (s) => String(s || '')
+  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(n)).replace(/&amp;/g, '&');
+const attr = (tag, name) => xmlDecode((tag.match(new RegExp(`\\b${name}="([^"]*)"`)) || [])[1]);
+
+function junitFiles(dir) {
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...junitFiles(full));
+    else if (/^TEST-.*\.xml$/.test(entry.name)) out.push(full);
+  }
+  return out;
+}
+
+if (isJUnitFolder) {
+  let durationMs = 0;
+  for (const file of junitFiles(resultsPath)) {
+    const folder = Object.keys(JUNIT_GROUPS).find((f) => file.includes(f));
+    const device = folder ? JUNIT_GROUPS[folder] : 'Tests';
+    const xml = readFileSync(file, 'utf8');
+    for (const m of xml.matchAll(/<testcase\b([^>]*?)(?:\/>|>([\s\S]*?)<\/testcase>)/g)) {
+      const head = m[1];
+      const body = m[2] || '';
+      const className = attr(head, 'classname');
+      const simple = className.split('.').pop().split('$')[0];
+      const name = attr(head, 'name');
+      const failure = body.match(/<(failure|error)\b([^>]*)(?:\/>|>([\s\S]*?)<\/\1>)/);
+      const outcome = failure ? 'failed' : /<skipped\b/.test(body) ? 'skipped' : /<(flakyFailure|flakyError)\b/.test(body) ? 'flaky' : 'passed';
+      const time = Number(attr(head, 'time')) * 1000 || 0;
+      durationMs += time;
+      const errorText = failure ? [attr(failure[2], 'message'), xmlDecode((failure[3] || '').replace(/<!\[CDATA\[|\]\]>/g, '')).trim()].filter(Boolean).join('\n') : '';
+      rows.push({
+        file: simple,
+        area: JAVA_AREAS[simple] || simple,
+        title: name,
+        path: `${simple} › ${name}`,
+        device,
+        outcome,
+        duration: time,
+        retries: 0,
+        error: errorText.split('\n').slice(0, 8).join('\n'),
+        lastStatus: outcome,
+      });
+    }
+  }
+  run.durationMs = Math.round(durationMs);
+}
+
 const count = (list, outcome) => list.filter((r) => r.outcome === outcome).length;
 const totals = {
   total: rows.length,
@@ -103,7 +173,7 @@ const groupBy = (key) => {
   }));
 };
 const byDevice = groupBy('device').sort((a, b) => a.name.localeCompare(b.name));
-const areaOrder = Object.values(AREAS);
+const areaOrder = [...Object.values(AREAS), ...Object.values(JAVA_AREAS)];
 const byArea = groupBy('area').sort((a, b) => areaOrder.indexOf(a.name) - areaOrder.indexOf(b.name));
 const failures = rows.filter((r) => r.outcome === 'failed');
 const flaky = rows.filter((r) => r.outcome === 'flaky');
@@ -119,7 +189,7 @@ history = [...history.filter((h) => h.run !== entry.run), entry].slice(-50);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pct = (n, d) => (d ? Math.round((n / d) * 1000) / 10 : 0);
 const fmtDuration = (ms) => (ms >= 60000 ? `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s` : `${(ms / 1000).toFixed(1)}s`);
-const reportLink = (r) => `../report/index.html#?q=${encodeURIComponent(r.title)}`;
+const reportLink = (r) => (isJUnitFolder ? `../${REPORT_DIR}/index.html` : `../${REPORT_DIR}/index.html#?q=${encodeURIComponent(r.title)}`);
 const dateText = new Date(run.date).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC';
 const overall = totals.failed ? 'failed' : totals.flaky ? 'flaky' : 'passed';
 const overallText = { passed: 'All tests passed', flaky: 'Passed with flaky tests', failed: `${totals.failed} failed` }[overall];
@@ -162,7 +232,7 @@ const html = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TaskLab Test Results</title>
+<title>${esc(TITLE)}</title>
 <style>
   :root {
     --bg: #f5f6fa; --surface: #ffffff; --text: #1d2130; --muted: #5d6478; --border: #dcdfe8;
@@ -227,14 +297,15 @@ const html = `<!doctype html>
 <body>
 <main>
   <header>
-    <h1>TaskLab Test Results</h1>
+    <h1>${esc(TITLE)}</h1>
     <span class="status ${overall}">${esc(overallText)}</span>
   </header>
-  <p class="meta">Run #${run.number} · ${esc(dateText)} · ${run.commitUrl ? `commit <a href="${esc(run.commitUrl)}">${esc(run.sha)}</a>` : esc(run.branch)} · took ${fmtDuration(run.durationMs)} · Playwright on ${byDevice.length} devices</p>
+  <p class="meta">Run #${run.number} · ${esc(dateText)} · ${run.commitUrl ? `commit <a href="${esc(run.commitUrl)}">${esc(run.sha)}</a>` : esc(run.branch)} · took ${fmtDuration(run.durationMs)} · ${isJUnitFolder ? 'JUnit 5 via Maven' : `Playwright on ${byDevice.filter((g) => g.name !== 'setup').length} ${byDevice.filter((g) => g.name !== 'setup').length === 1 ? 'browser' : 'browsers'}`}</p>
   <nav class="links" aria-label="Related pages">
-    <a class="primary" href="../report/index.html">Full report: screenshots, videos, traces</a>
+    <a class="primary" href="../${REPORT_DIR}/index.html">${esc(env.REPORT_LINK_TEXT || 'Full report: screenshots, videos, traces')}</a>
     ${run.url ? `<a href="${esc(run.url)}">This run on GitHub</a>` : ''}
     <a href="../">Open the TaskLab app</a>
+    ${env.OTHER_LINK_HREF ? `<a href="${esc(env.OTHER_LINK_HREF)}">${esc(env.OTHER_LINK_TEXT || 'Other results')}</a>` : ''}
   </nav>
 
   <section class="tiles" aria-label="Totals">
@@ -262,9 +333,9 @@ const html = `<!doctype html>
     <a href="${reportLink(r)}">Open in the report</a>
   </article>`).join('')}` : ''}
 
-  <h2>By device</h2>
+  <h2>${isJUnitFolder ? 'By test level' : 'By device'}</h2>
   <div class="table-wrap"><table>
-    <thead><tr><th>Device</th><th class="num">Passed</th><th class="num">Failed</th><th class="num">Flaky</th><th class="num">Skipped</th><th class="num">Pass rate</th><th>Result</th></tr></thead>
+    <thead><tr><th>${isJUnitFolder ? 'Level' : 'Device'}</th><th class="num">Passed</th><th class="num">Failed</th><th class="num">Flaky</th><th class="num">Skipped</th><th class="num">Pass rate</th><th>Result</th></tr></thead>
     <tbody>${byDevice.map((g) => `<tr><td>${esc(g.name)}</td><td class="num">${g.passed}</td><td class="num ${g.failed ? '' : 'zero'}">${g.failed}</td><td class="num ${g.flaky ? '' : 'zero'}">${g.flaky}</td><td class="num ${g.skipped ? '' : 'zero'}">${g.skipped}</td><td class="num">${pct(g.passed + g.flaky, g.total - g.skipped)}%</td><td class="bar">${stackBar(g)}</td></tr>`).join('')}</tbody>
   </table></div>
 
@@ -279,11 +350,11 @@ const html = `<!doctype html>
 
   <h2>Slowest tests</h2>
   <div class="table-wrap"><table>
-    <thead><tr><th>Test</th><th>Device</th><th class="num">Time</th></tr></thead>
+    <thead><tr><th>Test</th><th>${isJUnitFolder ? 'Level' : 'Device'}</th><th class="num">Time</th></tr></thead>
     <tbody>${slowest.map((r) => `<tr><td>${esc(r.title)}</td><td>${esc(r.device)}</td><td class="num">${fmtDuration(r.duration)}</td></tr>`).join('')}</tbody>
   </table></div>
 
-  <footer>Generated from Playwright's JSON report by scripts/build-test-dashboard.mjs. History keeps the last 50 runs.</footer>
+  <footer>Generated from ${isJUnitFolder ? 'JUnit XML reports' : "Playwright's JSON report"} by scripts/build-test-dashboard.mjs. History keeps the last 50 runs.</footer>
 </main>
 </body>
 </html>
